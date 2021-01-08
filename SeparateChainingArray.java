@@ -9,7 +9,7 @@ public class SeparateChainingArrayHash<Key, Value> {
 
     private int n;                                // number of key-value pairs
     private int m;                                // hash table size
-    private int l;                                // entry array length
+    private int len;                              // entry array length
     private Entry<Key, Value>[][] table;          // array of entry arrays
     
     /**
@@ -28,17 +28,17 @@ public class SeparateChainingArrayHash<Key, Value> {
     }
     
     /**
-     * Initializes an empty hash table with m chains each with a size of l.
+     * Initializes an empty hash table with m chains each with a size of len.
      * @param m the initial number of chains
-     * @param l the length of the entry arrays
+     * @param len the length of the entry arrays
      *          should not be to big, because of slow down 
      *          (entry array is searched linear)
      */
-    public SeparateChainingArrayHash(int m, int l) {
+    public SeparateChainingArrayHash(int m, int len) {   //<Key, Value>?
         n = 0;
         this.m = m;
-        this.l = l;
-        table = (Entry<Key, Value>[][]) new Entry[m][l];
+        this.len = len;
+        table = (Entry<Key, Value>[][]) new Entry[m][len];
         for (int i = 0; i < table.length; i++) {
             for (int j = 0; j < table[i].length; j++) {
                 table[i][j] = new Entry<>();
@@ -63,7 +63,7 @@ public class SeparateChainingArrayHash<Key, Value> {
         }
         
         SeparateChainingArrayHash<Key, Value> temp 
-                = new SeparateChainingArrayHash<Key, Value>(chains, l);
+                = new SeparateChainingArrayHash<Key, Value>(chains, len);
         for (int i = 0; i < table.length; i++) {
             for (int j = 0; j < table[i].length; j++) {
                 if (table[i][j].occupied == true) {
@@ -73,7 +73,7 @@ public class SeparateChainingArrayHash<Key, Value> {
         }
         this.n = temp.n;
         this.m = temp.m;
-        this.l = temp.l;
+        this.len = temp.len;
         this.table = temp.table;
     }
     
@@ -133,7 +133,7 @@ public class SeparateChainingArrayHash<Key, Value> {
         int i = hash(key);
         
         /*@
-		  @ loop_invariant 0 <= j && j <= table[i].length &&
+		  @ lenoop_invariant 0 <= j && j <= table[i].length &&
           @                (\forall int x; 0 <= x && x < j; 
           @                     table[i][x].occupied == false || table[i][x].key != key);
 		  @ assignable \strictly_nothing;
@@ -165,13 +165,13 @@ public class SeparateChainingArrayHash<Key, Value> {
         }
 
         // double table size if 50% full
-        if (n >= (l * m * / 2)) {
+        if (n >= (len * m / 2)) {
             resize(2*m);
         }
 
         int i = hash(key);
 
-        // So a key cant be twice in the hash table
+        // So a key can't be twice in the hash table
         for (int j = 0; j < table[i].length; j++) {
             if (table[i][j].occupied == true && table[i][j].key == key) {
                 table[i][j].value = val;
@@ -181,7 +181,7 @@ public class SeparateChainingArrayHash<Key, Value> {
         
         //possible memory overflow
         //limit the while loop and return error that the element could not be put
-        // Or increase the entry array size, inefficent but easy
+        // Or increase the entry array size, inefficient but easy
         boolean b = true;
         while (b) {
             for (int j = 0; j < table[i].length; j++) {
@@ -210,10 +210,34 @@ public class SeparateChainingArrayHash<Key, Value> {
      * @param  key the key
      * @throws IllegalArgumentException if key is null
      */
+    /*@
+	  @ public normal_behaviour
+      @   requires key != null;
+	  @   ensures (\old(n) - 1 == n)
+      @               ==> ((\old(m) > INIT_CAPACITY && n <= len * \old(m) / 8) 
+      @                   ==> (m == \old(m) / 2)
+      @               && (\exists int x; 0 <= x && x < table[i].length;
+      @                   \old(table[i][x].occupied) == true && table[i][x].key == key
+      @                   && table[i][x].occupied == false)
+      @   assignable n, table[*][*];
+	  @*/
     public void delete(Key key) {
         if (key == null) throw new IllegalArgumentException("argument to delete() is null");
 
         int i = hash(key);
+        
+        /*@
+		  @ loop_invariant 0 <= j && j <= table[i].length && (n == \old(n) || n == old(n) - 1)
+          @                && (\old(n) - 1 == n) ==>
+          @                    (\exists int x; 0 <= x && x < j;
+          @                        \old(table[i][x].occupied) == true && table[i][x].key == key
+          @                        && table[i][x].occupied == false)
+          @                && (\old(n) == n) ==>
+          @                    (\forall int x; 0 <= x && x < j; 
+          @                        table[i][x].occupied == false || table[i][x].key != key);
+		  @ assignable n, table[i][*];
+		  @ decreases table[i].length - j;
+		  @*/
         for (int j = 0; j < table[i].length; j++) {
             if (table[i][j].occupied == true && table[i][j].key == key) {
                 table[i][j].occupied = false;
@@ -221,7 +245,11 @@ public class SeparateChainingArrayHash<Key, Value> {
             }
         }
 
-        // halves size of array if it's 12.5% full or less
-        if (m > INIT_CAPACITY && n <= l * m / 8) resize(m/2);
+        // halves size of array if it's 12.5% full or leness
+        if (m > INIT_CAPACITY && n <= len * m / 8) resize(m/2);
+        // Must m be assignable? It is changed in resize not here.
+        // ==> or <==> ?
+        // only when \old(n) - 1 == n ?
+        // can resize() change n or len ?
     } 
 }
