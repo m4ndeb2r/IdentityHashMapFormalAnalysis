@@ -55,15 +55,16 @@ public class SeparateChainingArrayHash<Key, Value> {
      */
     private static final int MAX_ARRAY_SIZE = Integer.MAX_VALUE - 8;
     
-    // resize the hash table to have the given number of chains,
+    // resize the hash table to have the given number of chains and length
     // rehashing all of the keys
-    private void resize(int chains) {
-        if (chains > MAX_ARRAY_SIZE) {
+//possible memory overflow
+    private void resize(int chains, int length) {
+        if (chains * length > MAX_ARRAY_SIZE) {
             return;
         }
         
         SeparateChainingArrayHash<Key, Value> temp 
-                = new SeparateChainingArrayHash<Key, Value>(chains, len);
+                = new SeparateChainingArrayHash<Key, Value>(chains, length);
         for (int i = 0; i < table.length; i++) {
             for (int j = 0; j < table[i].length; j++) {
                 if (table[i][j].occupied == true) {
@@ -75,6 +76,14 @@ public class SeparateChainingArrayHash<Key, Value> {
         this.m = temp.m;
         this.len = temp.len;
         this.table = temp.table;
+    }
+    
+    private void resizeChains(int chains) {
+        resize(chains, len);
+    }
+    
+    private void resizeLength(int length) {
+        resize(m, length);
     }
     
     // hash function for keys - returns value between 0 and m-1
@@ -132,8 +141,7 @@ public class SeparateChainingArrayHash<Key, Value> {
         if (key == null) throw new IllegalArgumentException("argument to get() is null");
         int i = hash(key);
         
-        /*@
-		  @ lenoop_invariant 0 <= j && j <= table[i].length &&
+        /*@ loop_invariant 0 <= j && j <= table[i].length &&
           @                (\forall int x; 0 <= x && x < j; 
           @                     table[i][x].occupied == false || table[i][x].key != key);
 		  @ assignable \strictly_nothing;
@@ -155,23 +163,44 @@ public class SeparateChainingArrayHash<Key, Value> {
      *
      * @param  key the key
      * @param  val the value
-     * @throws IllegalArgumentException if key is null
+     * @throws IllegalArgumentException if key or val is null
      */
+    /*@ public normal_behaviour
+      @   requires key != null, val != null;
+	  @   ensures (n == \old(n) || n == old(n) + 1)
+      @           && (\old(n) >= (\old(len) * \old(m) / 2)) ==> (m == \old(m) * 2)
+      @           && (\old(n) == n) ==>
+      @               (\exists int x; 0 <= x && x < \old(len);
+      @                   \old(table[i][x].occupied) == true && \old(table[i][x].key) == key
+      @                   && table[i][x].occupied == true && table[i][x].key == key
+      @                   && table[i][x].value == val)
+      @           && (\old(n) + 1 == n) ==> 
+      @               (((\exists int y; 0 <= y && y < \old(len);
+      @                   \old(table[i][y].occupied) == false)
+      @               || \old(len) * 2 == len)
+      @               && (\exists int z; 0 <= z && z <= table[i].length;
+      @                   table[i][z].occupied == true && table[i][z].key == key 
+      @                   && table[i][z].value == val));
+      @   assignable n, table[*][*];
+	  @*/ 
     public void put(Key key, Value val) {
         if (key == null) throw new IllegalArgumentException("first argument to put() is null");
-        if (val == null) {
-            delete(key);
-            return;
-        }
+        if (val == null) throw new IllegalArgumentException("second argument to put() is null");
 
         // double table size if 50% full
         if (n >= (len * m / 2)) {
-            resize(2*m);
+            resizeChains(2*m);
         }
 
         int i = hash(key);
 
         // So a key can't be twice in the hash table
+        /*@ loop_invariant 0 <= j && j <= table[i].length &&
+          @                (\forall int x; 0 <= x && x < j; 
+          @                     table[i][x].occupied == false || table[i][x].key != key);
+		  @ assignable table[i][*];
+		  @ decreases table[i].length - j;
+		  @*/
         for (int j = 0; j < table[i].length; j++) {
             if (table[i][j].occupied == true && table[i][j].key == key) {
                 table[i][j].value = val;
@@ -179,28 +208,26 @@ public class SeparateChainingArrayHash<Key, Value> {
             }
         }
         
-        //possible memory overflow
-        //limit the while loop and return error that the element could not be put
-        // Or increase the entry array size, inefficient but easy
-        boolean b = true;
-        while (b) {
-            for (int j = 0; j < table[i].length; j++) {
-                if (table[i][j].occupied == false) {
-                    table[i][j].key = key;
-                    table[i][j].value = val;
-                    table[i][j].occupied = true;
-                    n++;
-                    return;
-                }
-            }
-            if (m*2 <= MAX_ARRAY_SIZE) {
-                resize(2*m);
-                i = hash(key);
-            } else {
-                b = false;
-                // was dann?
+        /*@ loop_invariant 0 <= j && j <= table[i].length &&
+          @                (\forall int x; 0 <= x && x < j; table[i][x].occupied == true);
+          @ assignable table[i][*], n;
+          @ decreases table[i].length - j;
+		  @*/
+        for (int j = 0; j < table[i].length; j++) {
+            if (table[i][j].occupied == false) {
+                table[i][j].key = key;
+                table[i][j].value = val;
+                table[i][j].occupied = true;
+                n++;
+                return;
             }
         }
+        
+        resizeLength(len*2);
+        table[i][len/2].key = key;
+        table[i][len/2].value = val;
+        table[i][len/2].occupied = true;
+        n++;
     }
 
     /**
@@ -213,12 +240,16 @@ public class SeparateChainingArrayHash<Key, Value> {
     /*@
 	  @ public normal_behaviour
       @   requires key != null;
-	  @   ensures (\old(n) - 1 == n)
-      @               ==> ((\old(m) > INIT_CAPACITY && n <= len * \old(m) / 8) 
+	  @   ensures (n == \old(n) || n == old(n) - 1)
+      @           && (\old(n) == n) ==>
+      @               (\forall int x; 0 <= x && x < table[i].length; 
+      @                   table[i][x].occupied == false || table[i][x].key != key);
+      @           && (\old(n) - 1 == n) ==>
+      @               ((\old(m) > INIT_CAPACITY && n <= len * \old(m) / 8) 
       @                   ==> (m == \old(m) / 2)
       @               && (\exists int x; 0 <= x && x < table[i].length;
       @                   \old(table[i][x].occupied) == true && table[i][x].key == key
-      @                   && table[i][x].occupied == false)
+      @                   && table[i][x].occupied == false));
       @   assignable n, table[*][*];
 	  @*/
     public void delete(Key key) {
@@ -226,8 +257,7 @@ public class SeparateChainingArrayHash<Key, Value> {
 
         int i = hash(key);
         
-        /*@
-		  @ loop_invariant 0 <= j && j <= table[i].length && (n == \old(n) || n == old(n) - 1)
+        /*@ loop_invariant 0 <= j && j <= table[i].length && (n == \old(n) || n == old(n) - 1)
           @                && (\old(n) - 1 == n) ==>
           @                    (\exists int x; 0 <= x && x < j;
           @                        \old(table[i][x].occupied) == true && table[i][x].key == key
@@ -244,12 +274,14 @@ public class SeparateChainingArrayHash<Key, Value> {
                 n--;
             }
         }
+        //assignable table[i][*] or table[i][*].occupied?
 
         // halves size of array if it's 12.5% full or leness
-        if (m > INIT_CAPACITY && n <= len * m / 8) resize(m/2);
+        if (m > INIT_CAPACITY && n <= len * m / 8) resizeChains(m/2);
         // Must m be assignable? It is changed in resize not here.
         // ==> or <==> ?
         // only when \old(n) - 1 == n ?
         // can resize() change n or len ?
+        // Is exists for exactly one or at least one?
     } 
 }
