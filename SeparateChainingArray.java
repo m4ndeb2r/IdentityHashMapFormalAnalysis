@@ -4,10 +4,10 @@
  *  When associating a value with a key that is already in the hash table,
  *  the convention is to replace the old value with the new value.
  */
-public class SeparateChainingArrayHash<Key, Value> {
-    private static class Entry<K, V> { // table entry
-        K key;
-        V value;
+public class SeparateChainingArrayHash {
+    private static class Entry { // table entry
+        Integer key;
+        Integer value;
         boolean occupied;
     }
     
@@ -16,7 +16,7 @@ public class SeparateChainingArrayHash<Key, Value> {
     private int n;                                // number of key-value pairs
     private int m;                                // hash table size
     private int len;                              // entry array length
-    private Entry<Key, Value>[][] table;          // array of entry arrays
+    private Entry[][] table;                      // array of entry arrays
     
     /**
      * Initializes an empty symbol table.
@@ -47,10 +47,10 @@ public class SeparateChainingArrayHash<Key, Value> {
         n = 0;
         this.m = chains;
         this.len = length;
-        table = (Entry<Key, Value>[][]) new Entry[chains][length];
+        table = (Entry[][]) new Entry[chains][length];
         for (int i = 0; i < table.length; i++) {
             for (int j = 0; j < table[i].length; j++) {
-                table[i][j] = new Entry<>();
+                table[i][j] = new Entry();
                 table[i][j].occupied = false;
             }
         }
@@ -71,17 +71,17 @@ public class SeparateChainingArrayHash<Key, Value> {
       @   requires chains >= 0 && length >= 0;
 	  @   ensures \old(n) == n &&
       @           (\forall int x; 0 <= x && x < m;
-      @               (\forall int y; 0 <= y && y < table[i].length && table[x][y].occupied == true;
+      @               (\forall int y; 0 <= y && y < table[x].length && table[x][y].occupied == true;
       @                   (get(table[x][y].key) == \old(this.get(table[x][y].key)))));
-      @   assignable n, m, len, table[*][*];
+      @   assignable n, m, len, table;
 	  @*/
     private void resize(int chains, int length) {
         if (chains * length > MAX_ARRAY_SIZE) chains = MAX_ARRAY_SIZE / length;
         if (chains < 1) chains = 1;
         if (length < 1) length = 1;
         
-        SeparateChainingArrayHash<Key, Value> temp 
-                = new SeparateChainingArrayHash<Key, Value>(chains, length);
+        SeparateChainingArrayHash temp 
+                = new SeparateChainingArrayHash(chains, length);
         
         /*@ loop_invariant 0 <= i && i <= table.length
           @                && (\forall int x; 0 <= x && x < i;
@@ -90,7 +90,7 @@ public class SeparateChainingArrayHash<Key, Value> {
           @                && (\sum int x; 0 <= x && x < i;
           @                    (\num_of int y; 0 <= y && y < table[i].length && table[x][y].occupied == true))
           @                    == temp.n;
-		  @ assignable table[*][*], n;
+		  @ assignable temp.table, n;
 		  @ decreases table.length - i;
 		  @*/
         for (int i = 0; i < table.length; i++) {
@@ -98,12 +98,12 @@ public class SeparateChainingArrayHash<Key, Value> {
             /*@ loop_invariant 0 <= j && j <= table[i].length &&
               @                (\forall int x; 0 <= x && x < j && table[i][x].occupied == true;
               @                     (get(table[i][x].key) == temp.get(table[i][x].key)));
-		      @ assignable table[i][*], n;
+		      @ assignable temp.table[i][*], n;
 		      @ decreases table[i].length - j;
 		      @*/
             for (int j = 0; j < table[i].length; j++) {
                 if (table[i][j].occupied == true) {
-                    //It is possible that resizeLength is called.
+                    //It is possible that resize is called.
                     temp.put(table[i][j].key, table[i][j].value);
                 }
             }
@@ -114,17 +114,8 @@ public class SeparateChainingArrayHash<Key, Value> {
         this.table = temp.table;    //Is this covered by table[*][*]?
     }
     
-    private void resizeChains(int chains) {
-        resize(chains, len);
-    }
-    
-    private void resizeLength(int length) {
-        resize(m, length);
-    }
-    
     // hash function for keys - returns value between 0 and m-1
-    // "& 0x7fffffff" : turn the 32-bit integer into a 31-bit nonnegative integer
-    private int hash(Key key) {
+    private /*@ pure @*/ int hash(Integer key) {
         return (key.hashCode() & 0x7fffffff) % m;
     }
     
@@ -150,7 +141,7 @@ public class SeparateChainingArrayHash<Key, Value> {
      *         false otherwise
      * @throws IllegalArgumentException if key is null
      */
-    public boolean contains(Key key) {
+    public boolean contains(Integer key) {
         if (key == null) throw new IllegalArgumentException("argument to contains() is null");
         return get(key) != null;
     } 
@@ -166,11 +157,12 @@ public class SeparateChainingArrayHash<Key, Value> {
     /*@
 	  @ public normal_behavior
       @   requires key != null;
-	  @   ensures \result == null && (\forall int x; 0 <= x && x < table[i].length; 
-      @               table[i][x].occupied == false || table[i][x].key != key) ||
-      @           (\exists int y; 0 <= y && y < table[i].length;
-      @               table[i][y].occupied == true && table[i][y].key == key &&
-      @               table[i][y].value == \result);
+	  @   ensures (\result == null && 
+      @           (\forall int x; 0 <= x && x < table[hash(key)].length; 
+      @               table[hash(key)][x].occupied == false || table[hash(key)][x].key != key))
+      @           || (\exists int y; 0 <= y && y < table[hash(key)].length;
+      @               table[hash(key)][y].occupied == true && table[hash(key)][y].key == key
+      @               && table[hash(key)][y].value == \result);
       @   assignable \nothing;
       @
       @ also
@@ -179,7 +171,7 @@ public class SeparateChainingArrayHash<Key, Value> {
       @   signals_only IllegalArgumentException;
       @   signals (IllegalArgumentException e) true;
 	  @*/
-    public /*@ pure @*/ Value get(Key key) {
+    public /*@ pure @*/ Integer get(Integer key) {
         if (key == null) throw new IllegalArgumentException("argument to get() is null");
         int i = hash(key);
         
@@ -209,21 +201,26 @@ public class SeparateChainingArrayHash<Key, Value> {
      */
     /*@ public normal_behavior
       @   requires key != null && val != null;
-	  @   ensures (n == \old(n) || n == old(n) + 1)
+	  @   ensures (n == \old(n) || n == \old(n) + 1)
       @           && (\old(n) >= (\old(len) * \old(m) / 2)) ==> (m == \old(m) * 2)
       @           && (\old(n) == n) ==>
-      @               (\exists int x; 0 <= x && x < \old(len);
-      @                   \old(table[i][x].occupied) == true && \old(table[i][x].key) == key
-      @                   && table[i][x].occupied == true && table[i][x].key == key
-      @                   && table[i][x].value == val)
+      @               (\exists int x; 0 <= x && x < table[hash(key)].length;
+      @                   \old(table[hash(key)][x].occupied) == true && \old(table[hash(key)][x].key) == key
+      @                   && table[hash(key)][x].occupied == true && table[hash(key)][x].key == key
+      @                   && table[hash(key)][x].value == val)
       @           && (\old(n) + 1 == n) ==> 
       @               (((\exists int y; 0 <= y && y < \old(len);
-      @                   \old(table[i][y].occupied) == false)
+      @                   \old(table[hash(key)][y].occupied) == false)
       @               || \old(len) * 2 == len)
-      @               && (\exists int z; 0 <= z && z <= table[i].length;
-      @                   table[i][z].occupied == true && table[i][z].key == key 
-      @                   && table[i][z].value == val));
-      @   assignable n, table[*][*];
+      @               && (\exists int z; 0 <= z && z <= table[hash(key)].length;
+      @                   table[hash(key)][z].occupied == true && table[hash(key)][z].key == key 
+      @                   && table[hash(key)][z].value == val))
+      @           && (\exists int x; 0 <= x && x <= table[hash(key)].length;
+      @                   table[hash(key)][x].occupied == true && table[hash(key)][x].key == key
+      @                   && (\forall int y; 0 <= y && y <= table[hash(key)].length;
+      @                          (table[hash(key)][y].occupied == true && table[hash(key)][y].key == key)
+      @                          ==> (x == y)));
+      @   assignable n, m, len, table;
       @
       @ also
       @ exceptional_behavior
@@ -231,13 +228,13 @@ public class SeparateChainingArrayHash<Key, Value> {
       @   signals_only IllegalArgumentException;
       @   signals (IllegalArgumentException e) true;
 	  @*/ 
-    public void put(Key key, Value val) {
+    public void put(Integer key, Integer val) {
         if (key == null) throw new IllegalArgumentException("first argument to put() is null");
         if (val == null) throw new IllegalArgumentException("second argument to put() is null");
 
         // double table size if 50% full
         if (n >= (len * m / 2)) {
-            resizeChains(2*m);
+            resize(2*m, len);
         }
 
         int i = hash(key);
@@ -256,22 +253,22 @@ public class SeparateChainingArrayHash<Key, Value> {
             }
         }
         
-        /*@ loop_invariant 0 <= j && j <= table[i].length &&
-          @                (\forall int x; 0 <= x && x < j; table[i][x].occupied == true);
+        /*@ loop_invariant 0 <= k && k <= table[i].length &&
+          @                (\forall int x; 0 <= x && x < k; table[i][x].occupied == true);
           @ assignable table[i][*], n;
-          @ decreases table[i].length - j;
+          @ decreases table[i].length - k;
 		  @*/
-        for (int j = 0; j < table[i].length; j++) {
-            if (table[i][j].occupied == false) {
-                table[i][j].key = key;
-                table[i][j].value = val;
-                table[i][j].occupied = true;
+        for (int k = 0; k < table[i].length; k++) {
+            if (table[i][k].occupied == false) {
+                table[i][k].key = key;
+                table[i][k].value = val;
+                table[i][k].occupied = true;
                 n++;
                 return;
             }
         }
         
-        resizeLength(len*2);
+        resize(m, len*2);
         table[i][len/2].key = key;
         table[i][len/2].value = val;
         table[i][len/2].occupied = true;
@@ -288,17 +285,17 @@ public class SeparateChainingArrayHash<Key, Value> {
     /*@
 	  @ public normal_behavior
       @   requires key != null;
-	  @   ensures (n == \old(n) || n == old(n) - 1)
+	  @   ensures (n == \old(n) || n == \old(n) - 1)
       @           && (\old(n) == n) ==>
-      @               (\forall int x; 0 <= x && x < table[i].length; 
-      @                   table[i][x].occupied == false || table[i][x].key != key)
+      @               (\forall int x; 0 <= x && x < table[hash(key)].length; 
+      @                   table[hash(key)][x].occupied == false || table[hash(key)][x].key != key)
       @           && (\old(n) - 1 == n) ==>
       @               ((\old(m) > INIT_CAPACITY && n <= len * \old(m) / 8) 
       @                   ==> (m == \old(m) / 2)
-      @               && (\exists int x; 0 <= x && x < table[i].length;
-      @                   \old(table[i][x].occupied) == true && table[i][x].key == key
-      @                   && table[i][x].occupied == false));
-      @   assignable n, table[*][*];
+      @               && (\exists int x; 0 <= x && x < table[hash(key)].length;
+      @                   \old(table[hash(key)][x].occupied) == true && table[hash(key)][x].key == key
+      @                   && table[hash(key)][x].occupied == false));
+      @   assignable n, table;
       @
       @ also
       @ exceptional_behavior
@@ -306,12 +303,12 @@ public class SeparateChainingArrayHash<Key, Value> {
       @   signals_only IllegalArgumentException;
       @   signals (IllegalArgumentException e) true;
 	  @*/
-    public void delete(Key key) {
+    public void delete(Integer key) {
         if (key == null) throw new IllegalArgumentException("argument to delete() is null");
 
         int i = hash(key);
         
-        /*@ loop_invariant 0 <= j && j <= table[i].length && (n == \old(n) || n == old(n) - 1)
+        /*@ loop_invariant 0 <= j && j <= table[i].length && (n == \old(n) || n == \old(n) - 1)
           @                && (\old(n) - 1 == n) ==>
           @                    (\exists int x; 0 <= x && x < j;
           @                        \old(table[i][x].occupied) == true && table[i][x].key == key
@@ -330,6 +327,6 @@ public class SeparateChainingArrayHash<Key, Value> {
         }
 
         // halves size of array if it's 12.5% full or less
-        if (m > INIT_CAPACITY && n <= len * m / 8) resizeChains(m/2);
+        if (m > INIT_CAPACITY && n <= len * m / 8) resize(m/2, len);
     } 
 }
