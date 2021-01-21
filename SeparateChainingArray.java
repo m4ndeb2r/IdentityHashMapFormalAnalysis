@@ -5,7 +5,7 @@
  * the hash table, the convention is to replace the old value with the new
  * value.
  */
-public class SeparateChainingArrayHash {
+public class SeparateChainingArray {
 
 	private static final int INIT_CAPACITY = 8;
 
@@ -13,19 +13,43 @@ public class SeparateChainingArrayHash {
 	private int chains;             // hash table size
 	private HashObject[][] keys;    // two dimensional array for keys
 	private Object[][] vals;        // two dimensional array for keys
-    
-    //This comment roughly describes what the invariant is supposed to mean.
-    //- The arrays keys and vals are equally long.
-    //- Each array inside of keys has an equally long partner array in vals at the same postion. 
-    /*@ instance invariant keys.length == vals.length && chains == keys.length
-      @                    && (\forall int x; 0 <= x && x < chains;
+     
+    /*@ // The hash table has at least one chain.
+      @ instance invariant chains > 0;
+      @
+      @ //The hash table cant have a negative amount of elements.
+      @ instance invariant n >= 0;
+      @
+      @ // The arrays keys and vals are equally long.
+      @ instance invariant chains == vals.length && chains == keys.length;
+      @
+      @ // Each array inside of keys has an equally long partner array in vals at the same postion
+      @ instance invariant (\forall int x; 0 <= x && x < chains;
       @                        keys[x].length == vals[x].length);
+      @ 
+      @ //Every element in keys or vals is nonnull.
+      @ instance invariant (\forall int x; 0 <= x && x < chains;
+      @                        keys[x] != null && vals[x] != null
+      @                        && (\forall int y; 0 <= y && y < keys[x].length;
+      @                            keys[x][y] != null && vals[x][y] != null));
+      @
+      @ //Each Key is in its correct bucket.
+      @ instance invariant (\forall int x; 0 <= x && x < chains;
+      @                        (\forall int y; 0 <= y && y < keys[x].length;
+      @                            x == hash(keys[x][y])));
+      @
+      @ //Each key is exactly ones in the hash table.
+      @ //Removed the exists, because of the first two foralls.
+      @ instance invariant (\forall int x; 0 <= x && x < chains;
+      @                        (\forall int y; 0 <= y && y < keys[x].length;
+      @                            (\forall int z; 0 <= z && z <= keys[x].length;
+      @                                keys[x][z].equals(keys[x][y]) ==> (y == z))));
       @*/
 
 	/**
 	 * Initializes an empty symbol table.
 	 */
-	public SeparateChainingArrayHash() {
+	public SeparateChainingArray() {
 		this(INIT_CAPACITY);
 	}
 
@@ -38,14 +62,46 @@ public class SeparateChainingArrayHash {
 	 * @throws IllegalArgumentException
 	 *             if chains or length is smaller then 1
 	 */
-	public SeparateChainingArrayHash(int chains) {
-		if (chains <= 0)
-			throw new IllegalArgumentException("Chains needs to be at least 1");
+	public SeparateChainingArray(int chains) {
+		if (chains < 1)
+			chains = 1;
 		n = 0;
 		this.chains = chains;
 		keys = new HashObject[chains][0];
 		vals = new Object[chains][0];
 	}
+    
+    /*@ public normal_behavior
+      @   requires 0 <= i && i < chains;
+      @ 
+      @   //The result is -1 if and only if the given key is not in the hash table.
+	  @   ensures (\result == -1) <==>
+      @               (\forall int x; 0 <= x && x < chains; 
+      @                   !(keys[i][x].equals(key)));
+      @
+      @   //The result is not -1 if and only if the given key is in the hash table 
+      @   //    and the result is postion of the key.
+      @   ensures (\result != -1) <==> 
+      @               (\exists int y; 0 <= y && y < chains;
+      @                   keys[i][y].equals(key) && y == \result);
+      @
+      @   assignable \strictly_nothing;
+	  @*/
+    private int getIndex(int i, HashObject key) {
+        /*@ //Every postion in the array up until now didnt include the key.
+          @ //    This is always true, since the method terminates if the key is found.
+          @ loop_invariant 0 <= j && j <= keys[i].length &&
+          @                (\forall int x; 0 <= x && x < j; !(keys[i][x].equals(key)));
+		  @ assignable \strictly_nothing;
+		  @ decreases keys[i].length - j;
+		  @*/
+		for (int j = 0; j < keys[i].length; j++) {
+			if (keys[i][j].equals(key)) {
+				return j;
+			}
+		}
+        return -1;
+    }
 
 	/**
 	 * Returns the value associated with the specified key in this hash table.
@@ -54,19 +110,17 @@ public class SeparateChainingArrayHash {
 	 * @return the value associated with key in the hash table; null if no such value
 	 * @throws IllegalArgumentException if key is null
 	 */
-    //This comment roughly describes what the ensures clause is supposed to mean.
-    //- The result is null if and only if the given key is not in the hash table.
-    //- The result is not null if and only if the given key is in the hash table 
-    //    and the result is the Value at the same postion.
 	/*@
 	  @ public normal_behavior
-      @   requires key != null;
-	  @   ensures (\result == null <==>
-      @               (\forall int x; 0 <= x && x < keys[hash(key)].length; 
-      @                   !(keys[hash(key)][x].equals(key))))
-      @           && (\result != null <==> 
-      @               (\exists int y; 0 <= y && y < keys[hash(key)].length;
-      @                   keys[hash(key)][y].equals(key) && vals[hash(key)][y] == \result));
+      @   requires true;
+      @
+      @   //The result is null if and only if the given key is not in the hash table.
+	  @   ensures (\result == null) <==> (getIndex(hash(key), key) == -1);
+      @
+      @   //The result is not null if and only if the given key is in the hash table 
+      @   //    and the result is the Value at the same postion.
+      @   ensures (\result != null) <==> (\result == vals[hash(key)][getIndex(hash(key), key)]);
+      @
       @   assignable \nothing;
       @
       @ also
@@ -79,21 +133,13 @@ public class SeparateChainingArrayHash {
 		if (key == null) throw new IllegalArgumentException("argument to get() is null");
             
         int i = hash(key);
-
-        //This comment roughly describes what the loop_invariant is supposed to mean.
-        //- Every postion in the array up until now didnt include the key.
-        //    This is always true, since the method terminates if the key is found.
-		/*@ loop_invariant 0 <= j && j <= keys[i].length &&
-          @                (\forall int x; 0 <= x && x < j; !(keys[i][x].equals(key)));
-		  @ assignable \strictly_nothing;
-		  @ decreases keys[i].length - j;
-		  @*/
-		for (int j = 0; j < keys[i].length; j++) {
-			if (keys[i][j].equals(key)) {
-				return vals[i][j];
-			}
-		}
-		return null;
+        int j = getIndex(i, key);
+        
+        if (j != -1) {
+            return vals[i][j];
+        }
+        
+        return null;
 	}
 
 	/**
@@ -107,26 +153,29 @@ public class SeparateChainingArrayHash {
 	 * @param val the value
 	 * @throws IllegalArgumentException if key or val is null
 	 */
-    //This comment roughly describes what the ensures clause is supposed to mean.
-    //- The given key is now exactly ones in the hash table.
-    //- The amount of elements in the hash table (called n) is now either n or n+1.
-    //- If n is now n, then the key was and still is in the table and the given value is at this postion.
-    //    The current contract might not hold if resize is used, 
-    //    since the contract requires that the keys postion did not change.
-    //- If n is now n+1, then the table size at the keys postion (hash(key)) did increase by 1 and
-    //    the key-value-pair is now at the new postion. (Duplicate was already checked)
 	/*@ public normal_behavior
-      @   requires key != null && val != null;
+      @   requires true;
+      @   
+      @   //The given key is now exactly ones in the hash table.
       @   ensures (\exists int x; 0 <= x && x < keys[hash(key)].length; 
       @                   keys[hash(key)][x].equals(key)
       @                   && (\forall int y; 0 <= y && y <= keys[hash(key)].length;
-      @                          keys[hash(key)][y].equals(key) ==> (x == y)))
-      @           && ((n == \old(n)) <=!=> (n == \old(n) + 1))
-      @           && (n == \old(n)) ==>
+      @                          keys[hash(key)][y].equals(key) ==> (x == y)));
+      @   
+      @   //The amount of elements in the hash table (called n) is now either n or n+1.
+      @   ensures ((n == \old(n)) <=!=> (n == \old(n) + 1));
+      @   
+      @   //If n is now n, then the key was and still is in the table and the given value is at this postion.
+      @   //    The current contract might not hold if resize is used, 
+      @   //    since the contract requires that the keys postion did not change.
+      @   ensures (n == \old(n)) ==>
       @               (\exists int x; 0 <= x && x < keys[hash(key)].length;
       @                   keys[hash(key)][x].equals(key) && \old(keys[hash(key)][x].equals(key))
-      @                   && vals[hash(key)][x] == val)
-      @           && (n == \old(n) + 1) ==>
+      @                   && vals[hash(key)][x] == val);
+      @   
+      @   //If n is now n+1, then the table size at the keys postion (hash(key)) did increase by 1 and
+      @   //    the key-value-pair is now at the new postion. (Duplicate was already checked)
+      @   ensures(n == \old(n) + 1) ==>
       @               ((keys[hash(key)].length == \old(keys[hash(key)].length) + 1) 
       @                   && keys[hash(key)][keys[hash(key)].length-1].equals(key)
       @                   && vals[hash(key)][vals[hash(key)].length-1] == val);
@@ -151,11 +200,10 @@ public class SeparateChainingArrayHash {
 		int i = hash(key);
 
 		// So a key can't be twice in the hash table
-        //This comment roughly describes what the loop_invariant is supposed to mean.
-        //- Every postion in the array up until now didnt include the key.
-        //    This is always true, since the method terminates if the key is found and 
-        //    the new value is written.
-		/*@ loop_invariant 0 <= j && j <= keys[i].length &&
+		/*@ //Every postion in the array up until now didnt include the key.
+          @ //    This is always true, since the method terminates if the key is found and 
+          @ //    the new value is written.
+          @ loop_invariant 0 <= j && j <= keys[i].length &&
           @                (\forall int x; 0 <= x && x < j; !(keys[i][x].equals(key)));
           @ assignable vals[i][*];
           @ decreases keys[i].length - j;
@@ -169,10 +217,9 @@ public class SeparateChainingArrayHash {
 
 		HashObject[] keysTemp = new HashObject[keys[i].length+1];
         Object[] valsTemp = new Object[vals[i].length+1];
-        
-        //This comment roughly describes what the loop_invariant is supposed to mean.
-        //- The arrays are a copys of the other arrays up until this point.
-        /*@ loop_invariant 0 <= k && k <= keys[i].length &&
+
+        /*@ //The arrays are a copys of the other arrays up until this point.
+          @ loop_invariant 0 <= k && k <= keys[i].length &&
           @                (\forall int x; 0 <= x && x < k; 
           @                    keysTemp[x] == keys[i][x] && valsTemp[x] == vals[i][x]);
           @ assignable valsTemp[*], keysTemp[*];
@@ -198,18 +245,20 @@ public class SeparateChainingArrayHash {
 	 * @param key the key
 	 * @throws IllegalArgumentException if key is null
 	 */
-    //This comment roughly describes what the ensures clause is supposed to mean.
-    //- The given key is not in the table. (This can already be true at the beginning)
-    //- The amount of elements in the hash table (called n) is now either n or n-1.
-    //- If n is now n-1, then the key was in the hash table at the start of the method and
-    //    the table size at the keys postion did decrease be 1.
 	/*@
 	  @ public normal_behavior
-      @   requires key != null;
+      @   requires true;
+      @
+      @   //he given key is not in the table. (This can already be true at the beginning)
       @   ensures (\forall int x; 0 <= x && x <= keys[hash(key)].length;
-      @               !(keys[hash(key)][x].equals(key)))
-      @           && ((n == \old(n)) <=!=> (n == \old(n) - 1))
-      @           && (n == \old(n) - 1) ==> 
+      @               !(keys[hash(key)][x].equals(key)));
+      @
+      @   //The amount of elements in the hash table (called n) is now either n or n-1.
+      @   ensures (n == \old(n)) <=!=> (n == \old(n) - 1);
+      @
+      @   //If n is now n-1, then the key was in the hash table at the start of the method and
+      @   //    the table size at the keys postion did decrease be 1.
+      @   ensures (n == \old(n) - 1) ==> 
       @               ((\exists int x; 0 <= x && x <= \old(keys[hash(key)].length);
       @                   \old(keys[hash(key)][x].equals(key)))
       @               && (keys[hash(key)].length == \old(keys[hash(key)].length) - 1));
@@ -227,10 +276,9 @@ public class SeparateChainingArrayHash {
 		int i = hash(key);
         int d = -1;
 
-        //This comment roughly describes what the loop_invariant is supposed to mean.
-        //- Every postion in the array up until now, that is not d, didnt include the key.
-        //- If d is at least 0, then the given key is at this postion.
-		/*@ loop_invariant 0 <= j && j <= keys[i].length 
+		/*@ //Every postion in the array up until now, that is not d, didnt include the key.
+          @ //If d is at least 0, then the given key is at this postion.
+          @ loop_invariant 0 <= j && j <= keys[i].length 
           @                && ((\forall int x; 0 <= x && x < j && x != d; !(keys[i][x].equals(key))))
           @                && (d >= 0) ==> (keys[i][d].equals(key));
           @ assignable d;
@@ -246,9 +294,8 @@ public class SeparateChainingArrayHash {
             HashObject[] keysTemp = new HashObject[keys[i].length-1];
             Object[] valsTemp = new Object[vals[i].length-1];
             
-            //This comment roughly describes what the loop_invariant is supposed to mean.
-            //- The arrays are a copys of the other arrays up until this point.
-            /*@ loop_invariant 0 <= k && k <= d &&
+            /*@ // The arrays are a copys of the other arrays up until this point.
+              @ loop_invariant 0 <= k && k <= d &&
               @                (\forall int x; 0 <= x && x < k; 
               @                    keysTemp[x] == keys[i][x] && valsTemp[x] == vals[i][x]);
               @ assignable valsTemp[*], keysTemp[*];
@@ -258,11 +305,10 @@ public class SeparateChainingArrayHash {
                 keysTemp[k] = keys[i][k];
                 valsTemp[k] = vals[i][k];
             }
-            
-            //This comment roughly describes what the loop_invariant is supposed to mean.
-            //- The arrays are a copys of the other arrays starting from d+1 up until this point, 
-            //    but moved one index lower.
-            /*@ loop_invariant d+1 <= k && k <= keys[i].length &&
+
+            /*@ //The arrays are a copys of the other arrays starting from d+1 up until this point, 
+              @ //    but moved one index lower.
+              @ loop_invariant d+1 <= k && k <= keys[i].length &&
               @                (\forall int x; d+1 <= x && x < k; 
               @                    keysTemp[x] == keys[i][x] && valsTemp[x] == vals[i][x]);
               @ assignable valsTemp[*], keysTemp[*];
@@ -292,13 +338,14 @@ public class SeparateChainingArrayHash {
 
 	// resize the hash table to have the given number of chains
 	// rehashing all of the keys
-    //This comment roughly describes what the ensures clause is supposed to mean.
-    //- The amount of entrys in the hash table did not change.
-    //- Every entry of the old hash table is in the new table.
     /*@ public normal_behavior
       @   requires true;
-	  @   ensures \old(n) == n
-      @           && (\forall int x; 0 <= x && x < \old(keys.length);
+      @
+      @   //The amount of entrys in the hash table did not change.
+	  @   ensures \old(n) == n;
+      @
+      @   //Every entry of the old hash table is in the new table.
+      @   ensures (\forall int x; 0 <= x && x < \old(keys.length);
       @               (\forall int y; 0 <= y && y < \old(keys[x].length);
       @                   \old(get(keys[x][y])) == get(\old(keys[x][y]))));
       @   assignable n, chains, keys, vals;
@@ -309,30 +356,28 @@ public class SeparateChainingArrayHash {
 		if (chains < 1)
 			chains = 1;
 
-		SeparateChainingArrayHash temp = new SeparateChainingArrayHash(chains);
+		SeparateChainingArray temp = new SeparateChainingArray(chains);
         
-        //This comment roughly describes what the loop_invariant is supposed to mean.
-        //- Every entry of every chain up until now is in the new table.
-        //- The amount of transferd entrys is equal to the amount of entrys in the new table.
-        /*@ loop_invariant 0 <= i && i <= keys.length
+        /*@ //Every entry of every chain up until now is in the new table.
+          @ //The amount of transferd entrys is equal to the amount of entrys in the new table.
+          @ loop_invariant 0 <= i && i <= keys.length
           @                && (\forall int x; 0 <= x && x < i;
           @                    (\forall int y; 0 <= y && y < keys[i].length;
           @                        (get(keys[x][y]) == temp.get(keys[x][y]))))
           @                && (\sum int x; 0 <= x && x < i; keys[i].length)
           @                    == temp.n;
-		  @ assignable temp;
+		  @ assignable temp.*;
 		  @ decreases keys.length - i;
 		  @*/
 		for (int i = 0; i < keys.length; i++) {
-            //This comment roughly describes what the loop_invariant is supposed to mean.
-            //- Every entry of the current chain up until now is in the new table.
-            //- The amount of transferd entrys is equal to the amount of entrys in the new table.
-            /*@ loop_invariant 0 <= j && j <= keys[i].length &&
+            /*@ //Every entry of the current chain up until now is in the new table.
+              @ //The amount of transferd entrys is equal to the amount of entrys in the new table.
+              @ loop_invariant 0 <= j && j <= keys[i].length &&
               @                (\forall int x; 0 <= x && x < j;
               @                     (get(keys[i][x]) == temp.get(keys[i][x])))
               @                && ((\sum int x; 0 <= x && x < i; keys[i].length) + j)
               @                    == temp.n;
-		      @ assignable temp;
+		      @ assignable temp.*;
 		      @ decreases keys[i].length - j;
 		      @*/
 			for (int j = 0; j < keys[i].length; j++) {
@@ -346,8 +391,14 @@ public class SeparateChainingArrayHash {
 	}
 
 	// hash function for keys - returns value between 0 and chains-1
+    /*@ public normal_behavior
+      @   requires true;
+	  @   ensures (\forall HashObject o; o.equals(key) 
+      @               ==> (\result == (abs(o.hashCode()) % chains)))
+      @           && 0 <= \result && \result < chains;
+	  @*/
 	private /*@ strictly_pure @*/ int hash(HashObject key) {
-		return (key.hashCode() & 0x7fffffff) % chains;
+		return abs(key.hashCode()) % chains;
 	}
 
 	/**
@@ -362,6 +413,12 @@ public class SeparateChainingArrayHash {
 	 */
 	public boolean isEmpty() {
 		return size() == 0;
+	}
+    
+	private int abs(int number) {
+		if (number == Integer.MIN_VALUE) return 0;
+        if (number < 0) return -number;
+        return number;
 	}
 
 	/**
@@ -387,17 +444,27 @@ public class HashObject {
 		this.value = value;
 	}
 	
-	public /*@ strictly_pure @*/ int getValue() {
+	public final /*@ strictly_pure @*/ int getValue() {
 		return value;
 	}
 	
-	public /*@ strictly_pure @*/ int hashCode() {
+	public final /*@ strictly_pure @*/ int hashCode() {
 		return value;
 	}
 	
-	public /*@ strictly_pure @*/ boolean equals(Object otherObject) {
-		if (otherObject == this) return true;
-		if (otherObject == null || !(otherObject instanceof HashObject)) return false;
+    /*@   public normal_behavior
+      @     ensures (otherObject instanceof HashObject) 
+      @             ==> (\result <==> this.value == ((HashObject) otherObject).getValue());
+      @ also
+      @   public normal_behavior
+      @     requires this == otherObject;
+      @     ensures \result;
+      @ also
+      @     diverges false;
+      @     ensures otherObject == null ==> !\result ;
+      @*/
+	public /*@ strictly_pure @*/ boolean equals(/*@ nullable @*/ Object otherObject) {
+		if (!(otherObject instanceof HashObject)) return false;
 		return this.value == ((HashObject) otherObject).getValue();
 	}
 }
