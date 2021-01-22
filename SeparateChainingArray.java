@@ -9,29 +9,41 @@ public class SeparateChainingArray {
 
 	private static final int INIT_CAPACITY = 8;
 
-	private int n;                  // number of key-value pairs
-	private int chains;             // hash table size
-	private HashObject[][] keys;    // two dimensional array for keys
-	private Object[][] vals;        // two dimensional array for keys
-     
-    /*@ // The hash table has at least one chain.
+	private int n; // number of key-value pairs
+	private int chains; // hash table size
+	private HashObject[][] keys; // two dimensional array for keys
+	private Object[][] vals; // two dimensional array for keys
+
+	/*@ // The hash table has at least one chain.
       @ instance invariant chains > 0;
       @
       @ //The hash table cant have a negative amount of elements.
       @ instance invariant n >= 0;
       @
+      @ //The arrays keys and vals are nonnull.
+      @ instance invariant keys != null && vals != null;
+      @
       @ // The arrays keys and vals are equally long.
       @ instance invariant chains == vals.length && chains == keys.length;
+      @
+      @ //Every element in keys or vals is nonnull.
+      @ instance invariant (\forall int x; 0 <= x && x < chains;
+      @                        keys[x] != null && vals[x] != null);
       @
       @ // Each array inside of keys has an equally long partner array in vals at the same postion
       @ instance invariant (\forall int x; 0 <= x && x < chains;
       @                        keys[x].length == vals[x].length);
       @ 
-      @ //Every element in keys or vals is nonnull.
+      @ //Every element in keys[] or vals[] is nonnull.
       @ instance invariant (\forall int x; 0 <= x && x < chains;
-      @                        keys[x] != null && vals[x] != null
-      @                        && (\forall int y; 0 <= y && y < keys[x].length;
+      @                        (\forall int y; 0 <= y && y < keys[x].length;
       @                            keys[x][y] != null && vals[x][y] != null));
+      @
+      @ //No two different arrays in keys or vals have a reference to the same subarray. 
+      @ //   (No arrays aliasing)
+      @ instance invariant (\forall int x; 0 <= x && x < chains;
+      @                        (\forall int y; x < y && y < chains;
+      @                            keys[x] != keys[y] && vals[x] != vals[y]));
       @
       @ //Each Key is in its correct bucket.
       @ instance invariant (\forall int x; 0 <= x && x < chains;
@@ -53,7 +65,6 @@ public class SeparateChainingArray {
 		this(INIT_CAPACITY);
 	}
 
-
 	/**
 	 * Initializes an empty hash table with m chains each with a size of len.
 	 * 
@@ -70,25 +81,25 @@ public class SeparateChainingArray {
 		keys = new HashObject[chains][0];
 		vals = new Object[chains][0];
 	}
-    
-    /*@ public normal_behavior
+
+	/*@ public normal_behavior
       @   requires 0 <= i && i < chains;
       @ 
       @   //The result is -1 if and only if the given key is not in the hash table.
 	  @   ensures (\result == -1) <==>
-      @               (\forall int x; 0 <= x && x < chains; 
+      @               (\forall int x; 0 <= x && x < keys[i].length; 
       @                   !(keys[i][x].equals(key)));
       @
       @   //The result is not -1 if and only if the given key is in the hash table 
       @   //    and the result is postion of the key.
       @   ensures (\result != -1) <==> 
-      @               (\exists int y; 0 <= y && y < chains;
+      @               (\exists int y; 0 <= y && y < keys[i].length;
       @                   keys[i][y].equals(key) && y == \result);
       @
       @   assignable \strictly_nothing;
 	  @*/
-    private int getIndex(int i, HashObject key) {
-        /*@ //Every postion in the array up until now didnt include the key.
+	private int getIndex(int i, HashObject key) {
+		/*@ //Every postion in the array up until now didnt include the key.
           @ //    This is always true, since the method terminates if the key is found.
           @ loop_invariant 0 <= j && j <= keys[i].length &&
           @                (\forall int x; 0 <= x && x < j; !(keys[i][x].equals(key)));
@@ -100,15 +111,18 @@ public class SeparateChainingArray {
 				return j;
 			}
 		}
-        return -1;
-    }
+		return -1;
+	}
 
 	/**
 	 * Returns the value associated with the specified key in this hash table.
 	 *
-	 * @param key the key
-	 * @return the value associated with key in the hash table; null if no such value
-	 * @throws IllegalArgumentException if key is null
+	 * @param key
+	 *            the key
+	 * @return the value associated with key in the hash table; null if no such
+	 *         value
+	 * @throws IllegalArgumentException
+	 *             if key is null
 	 */
 	/*@
 	  @ public normal_behavior
@@ -130,16 +144,17 @@ public class SeparateChainingArray {
       @   signals (IllegalArgumentException e) true;
 	  @*/
 	public /*@ pure @*/ Object get(HashObject key) {
-		if (key == null) throw new IllegalArgumentException("argument to get() is null");
-            
-        int i = hash(key);
-        int j = getIndex(i, key);
-        
-        if (j != -1) {
-            return vals[i][j];
-        }
-        
-        return null;
+		if (key == null)
+			throw new IllegalArgumentException("argument to get() is null");
+
+		int i = hash(key);
+		int j = getIndex(i, key);
+
+		if (j != -1) {
+			return vals[i][j];
+		}
+
+		return null;
 	}
 
 	/**
@@ -149,9 +164,12 @@ public class SeparateChainingArray {
 	 * (and its associated value) from this hash table if the specified value is
 	 * null.
 	 *
-	 * @param key the key
-	 * @param val the value
-	 * @throws IllegalArgumentException if key or val is null
+	 * @param key
+	 *            the key
+	 * @param val
+	 *            the value
+	 * @throws IllegalArgumentException
+	 *             if key or val is null
 	 */
 	/*@ public normal_behavior
       @   requires true;
@@ -190,12 +208,12 @@ public class SeparateChainingArray {
 	public void put(HashObject key, Object val) {
 		if (key == null)
 			throw new IllegalArgumentException("first argument to put() is null");
-        if (val == null)
+		if (val == null)
 			throw new IllegalArgumentException("second argument to put() is null");
 
 		// double table size if 50% full
-		//if (n >= (len * m / 2))
-        //    resize(2 * m, len);
+		// if (n >= (len * m / 2))
+		// resize(2 * m, len);
 
 		int i = hash(key);
 
@@ -215,26 +233,26 @@ public class SeparateChainingArray {
 			}
 		}
 
-		HashObject[] keysTemp = new HashObject[keys[i].length+1];
-        Object[] valsTemp = new Object[vals[i].length+1];
+		HashObject[] keysTemp = new HashObject[keys[i].length + 1];
+		Object[] valsTemp = new Object[vals[i].length + 1];
 
-        /*@ //The arrays are a copys of the other arrays up until this point.
+		/*@ //The arrays are a copys of the other arrays up until this point.
           @ loop_invariant 0 <= k && k <= keys[i].length &&
           @                (\forall int x; 0 <= x && x < k; 
           @                    keysTemp[x] == keys[i][x] && valsTemp[x] == vals[i][x]);
           @ assignable valsTemp[*], keysTemp[*];
           @ decreases keys[i].length - k;
 		  @*/
-        for (int k = 0; k < keys[i].length; k++) {
-            keysTemp[k] = keys[i][k];
-            valsTemp[k] = vals[i][k];
-        }
-        
-        keysTemp[keys[i].length+1] = key;
-        valsTemp[vals[i].length+1] = val;
-        
-        keys[i] = keysTemp;
-        vals[i] = valsTemp;
+		for (int k = 0; k < keys[i].length; k++) {
+			keysTemp[k] = keys[i][k];
+			valsTemp[k] = vals[i][k];
+		}
+
+		keysTemp[keys[i].length + 1] = key;
+		valsTemp[vals[i].length + 1] = val;
+
+		keys[i] = keysTemp;
+		vals[i] = valsTemp;
 		n++;
 	}
 
@@ -242,8 +260,10 @@ public class SeparateChainingArray {
 	 * Removes the specified key and its associated value from this hash table (if
 	 * the key is in this hash table).
 	 *
-	 * @param key the key
-	 * @throws IllegalArgumentException if key is null
+	 * @param key
+	 *            the key
+	 * @throws IllegalArgumentException
+	 *             if key is null
 	 */
 	/*@
 	  @ public normal_behavior
@@ -271,10 +291,11 @@ public class SeparateChainingArray {
       @   signals (IllegalArgumentException e) true;
 	  @*/
 	public void delete(HashObject key) {
-		if (key == null) throw new IllegalArgumentException("argument to delete() is null");
+		if (key == null)
+			throw new IllegalArgumentException("argument to delete() is null");
 
 		int i = hash(key);
-        int d = -1;
+		int d = -1;
 
 		/*@ //Every postion in the array up until now, that is not d, didnt include the key.
           @ //If d is at least 0, then the given key is at this postion.
@@ -289,24 +310,24 @@ public class SeparateChainingArray {
 				d = j;
 			}
 		}
-        
-        if (d >= 0) {
-            HashObject[] keysTemp = new HashObject[keys[i].length-1];
-            Object[] valsTemp = new Object[vals[i].length-1];
-            
-            /*@ // The arrays are a copys of the other arrays up until this point.
+
+		if (d >= 0) {
+			HashObject[] keysTemp = new HashObject[keys[i].length - 1];
+			Object[] valsTemp = new Object[vals[i].length - 1];
+
+			/*@ // The arrays are a copys of the other arrays up until this point.
               @ loop_invariant 0 <= k && k <= d &&
               @                (\forall int x; 0 <= x && x < k; 
               @                    keysTemp[x] == keys[i][x] && valsTemp[x] == vals[i][x]);
               @ assignable valsTemp[*], keysTemp[*];
               @ decreases d - k;
               @*/
-            for (int k = 0; k < d; k++) {
-                keysTemp[k] = keys[i][k];
-                valsTemp[k] = vals[i][k];
-            }
+			for (int k = 0; k < d; k++) {
+				keysTemp[k] = keys[i][k];
+				valsTemp[k] = vals[i][k];
+			}
 
-            /*@ //The arrays are a copys of the other arrays starting from d+1 up until this point, 
+			/*@ //The arrays are a copys of the other arrays starting from d+1 up until this point, 
               @ //    but moved one index lower.
               @ loop_invariant d+1 <= k && k <= keys[i].length &&
               @                (\forall int x; d+1 <= x && x < k; 
@@ -314,22 +335,22 @@ public class SeparateChainingArray {
               @ assignable valsTemp[*], keysTemp[*];
               @ decreases keys[i].length - k;
               @*/
-            for (int l = d+1; l < keys[i].length; l++) {
-                keysTemp[l-1] = keys[i][l];
-                valsTemp[l-1] = vals[i][l];
-            }
-        
-            keys[i] = keysTemp;
-            vals[i] = valsTemp;
-            n--;
-        }
+			for (int l = d + 1; l < keys[i].length; l++) {
+				keysTemp[l - 1] = keys[i][l];
+				valsTemp[l - 1] = vals[i][l];
+			}
+
+			keys[i] = keysTemp;
+			vals[i] = valsTemp;
+			n--;
+		}
 
 		// halves size of array if it's 12.5% full or less
-		//if (m > INIT_CAPACITY && n <= len * m / 8)
-			//resize(m / 2, len);
+		// if (m > INIT_CAPACITY && n <= len * m / 8)
+		// resize(m / 2, len);
 	}
-    
-    /**
+
+	/**
 	 * The maximum size of array to allocate. Some VMs reserve some header words in
 	 * an array. Attempts to allocate larger arrays may result in OutOfMemoryError:
 	 * Requested array size exceeds VM limit
@@ -338,7 +359,7 @@ public class SeparateChainingArray {
 
 	// resize the hash table to have the given number of chains
 	// rehashing all of the keys
-    /*@ public normal_behavior
+	/*@ public normal_behavior
       @   requires true;
       @
       @   //The amount of entrys in the hash table did not change.
@@ -357,8 +378,8 @@ public class SeparateChainingArray {
 			chains = 1;
 
 		SeparateChainingArray temp = new SeparateChainingArray(chains);
-        
-        /*@ //Every entry of every chain up until now is in the new table.
+
+		/*@ //Every entry of every chain up until now is in the new table.
           @ //The amount of transferd entrys is equal to the amount of entrys in the new table.
           @ loop_invariant 0 <= i && i <= keys.length
           @                && (\forall int x; 0 <= x && x < i;
@@ -370,7 +391,7 @@ public class SeparateChainingArray {
 		  @ decreases keys.length - i;
 		  @*/
 		for (int i = 0; i < keys.length; i++) {
-            /*@ //Every entry of the current chain up until now is in the new table.
+			/*@ //Every entry of the current chain up until now is in the new table.
               @ //The amount of transferd entrys is equal to the amount of entrys in the new table.
               @ loop_invariant 0 <= j && j <= keys[i].length &&
               @                (\forall int x; 0 <= x && x < j;
@@ -387,11 +408,11 @@ public class SeparateChainingArray {
 		this.n = temp.n; // Should not change, further investigation needed
 		this.chains = temp.chains;
 		this.keys = temp.keys;
-        this.vals = temp.vals;
+		this.vals = temp.vals;
 	}
 
 	// hash function for keys - returns value between 0 and chains-1
-    /*@ public normal_behavior
+	/*@ public normal_behavior
       @   requires true;
 	  @   ensures (\forall HashObject o; o.equals(key) 
       @               ==> (\result == (abs(o.hashCode()) % chains)))
@@ -414,19 +435,23 @@ public class SeparateChainingArray {
 	public boolean isEmpty() {
 		return size() == 0;
 	}
-    
+
 	private int abs(int number) {
-		if (number == Integer.MIN_VALUE) return 0;
-        if (number < 0) return -number;
-        return number;
+		if (number == Integer.MIN_VALUE)
+			return 0;
+		if (number < 0)
+			return -number;
+		return number;
 	}
 
 	/**
 	 * Returns true if this hash table contains the specified key.
 	 *
-	 * @param key the key
+	 * @param key
+	 *            the key
 	 * @return true if this hash table contains key; false otherwise
-	 * @throws IllegalArgumentException if key is null
+	 * @throws IllegalArgumentException
+	 *             if key is null
 	 */
 	public boolean contains(HashObject key) {
 		if (key == null)
@@ -435,36 +460,25 @@ public class SeparateChainingArray {
 	}
 }
 
-
 public class HashObject {
-	
+
 	private final int value;
-	
+
 	public HashObject(int value) {
 		this.value = value;
 	}
-	
+
 	public final /*@ strictly_pure @*/ int getValue() {
 		return value;
 	}
-	
+
 	public final /*@ strictly_pure @*/ int hashCode() {
 		return value;
 	}
-	
-    /*@   public normal_behavior
-      @     ensures (otherObject instanceof HashObject) 
-      @             ==> (\result <==> this.value == ((HashObject) otherObject).getValue());
-      @ also
-      @   public normal_behavior
-      @     requires this == otherObject;
-      @     ensures \result;
-      @ also
-      @     diverges false;
-      @     ensures otherObject == null ==> !\result ;
-      @*/
+
 	public /*@ strictly_pure @*/ boolean equals(/*@ nullable @*/ Object otherObject) {
-		if (!(otherObject instanceof HashObject)) return false;
+		if (!(otherObject instanceof HashObject))
+			return false;
 		return this.value == ((HashObject) otherObject).getValue();
 	}
 }
