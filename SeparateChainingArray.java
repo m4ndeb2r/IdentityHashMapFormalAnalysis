@@ -54,7 +54,7 @@ public class SeparateChainingArray {
 	  @ //Removed the exists, because of the first two foralls.
 	  @ instance invariant	(\forall int x; 0 <= x && x < chains;
 	  @							(\forall int y; 0 <= y && y < keys[x].length;
-	  @								(\forall int z; 0 <= z && z <= keys[x].length;
+	  @								(\forall int z; 0 <= z && z < keys[x].length;
 	  @									keys[x][z].equals(keys[x][y]) ==> (y == z))));
 	  @*/
 
@@ -98,7 +98,7 @@ public class SeparateChainingArray {
 	  @
 	  @   assignable	\strictly_nothing;
 	  @*/
-	private int getIndex(int i, HashObject key) {
+	private /*@ strictly_pure @*/ int getIndex(int i, HashObject key) {
 		/*@ //Every postion in the array up until now didnt include the key.
 		  @ //	This is always true, since the method terminates if the key is found.
 		  @ loop_invariant	0 <= j && j <= keys[i].length &&
@@ -132,6 +132,7 @@ public class SeparateChainingArray {
 	  @   //	and the result is the Value at the same postion.
 	  @	  //	getIndex needs to ensure, that the key is in the table or not?
 	  @	  //	We could use getIndex or a new contains to obscure the data layout.
+	  @   //	What if two keys have the same value (==)?
 	  @   ensures	(\result != null) <==> 
 	  @					(\exists int x; 0 <= x && x < chains;
 	  @						(\exists int y; 0 <= y && y < vals[x].length;
@@ -167,6 +168,7 @@ public class SeparateChainingArray {
 	//NullPointerException - if either src or dest is null.
 	/*@
 	  @ public normal_behavior
+	  @   requires	keysTemp != null && valsTemp != null;
 	  @   requires	keysTemp.length == valsTemp.length;
 	  @	  requires	0 <= i && i < chains;
 	  @   requires	0 <= srcPos && srcPos < keys[i].length;
@@ -174,9 +176,9 @@ public class SeparateChainingArray {
 	  @   requires	0 <= length && length + srcPos <= keys[i].length 
 	  @				&& length + destPos <= keysTemp.length;
 	  @   ensures	(\forall int x; 0 <= x && x < length; 
-	  @					keysTemp[destPos + x] == keys[i][srcPos + x] 
+	  @					keysTemp[destPos + x] == keys[i][srcPos + x]
 	  @					&& valsTemp[destPos + x] == vals[i][srcPos + x]);
-	  @   assignable	valsTemp[*], keysTemp[*];
+	  @   assignable	valsTemp[destPos .. destPos+length-1], keysTemp[destPos .. destPos+length-1];
 	  @*/
 	private void arrayCopy(HashObject[] keysTemp, Object[] valsTemp, int i ,int srcPos, int destPos, int length) {
 		/*@ //The arrays are a copys of the other arrays up until this point.
@@ -184,13 +186,43 @@ public class SeparateChainingArray {
 		  @					(\forall int x; 0 <= x && x < k; 
 		  @						keysTemp[destPos + x] == keys[i][srcPos + x] 
 		  @						&& valsTemp[destPos + x] == vals[i][srcPos + x]);
-		  @ assignable valsTemp[*], keysTemp[*];
-		  @ decreases length - k;
+		  @ assignable	valsTemp[destPos .. destPos+length-1], keysTemp[destPos .. destPos+length-1];
+		  @ decreases	length - k;
 		  @*/
 		for (int k = 0; k < length; k++) {
 			keysTemp[destPos + k] = keys[i][srcPos + k];
-			valsTemp[destPos + k] = vals[i][srcPos + k];
+			valsTemp[destPos + k] = get(keys[i][srcPos + k]);
 		}
+		return;
+	}
+	
+	//RunTimeExceptions
+	//IndexOutOfBoundsException - if copying would cause access of data outside array bounds.
+	//NullPointerException - if either src or dest is null.
+	/*@
+	  @ public normal_behavior
+	  @   requires	keysTemp != null;
+	  @	  requires	0 <= i && i < chains;
+	  @   requires	0 <= srcPos && srcPos < keys[i].length;
+	  @   requires	0 <= destPos && destPos < keysTemp.length;
+	  @   requires	0 <= length && length + srcPos <= keys[i].length 
+	  @				&& length + destPos <= keysTemp.length;
+	  @   ensures	(\forall int x; 0 <= x && x < length; 
+	  @					keysTemp[destPos + x] == keys[i][srcPos + x]);
+	  @   assignable	keysTemp[destPos .. destPos+length-1];
+	  @*/
+	private void arrayCopy(HashObject[] keysTemp, int i ,int srcPos, int destPos, int length) {
+		/*@ //The arrays are a copys of the other arrays up until this point.
+		  @ loop_invariant	0 <= k && k <= length &&
+		  @					(\forall int x; 0 <= x && x < k; 
+		  @						keysTemp[destPos + x] == keys[i][srcPos + x]);
+		  @ assignable	keysTemp[destPos .. destPos+length-1];
+		  @ decreases	length - k;
+		  @*/
+		for (int k = 0; k < length; k++) {
+			keysTemp[destPos + k] = keys[i][srcPos + k];
+		}
+		return;
 	}
 
 	/**
@@ -209,12 +241,6 @@ public class SeparateChainingArray {
 	 */
 	/*@ public normal_behavior
 	  @   requires	true;
-	  @   
-	  @   //The given key is now exactly ones in the hash table.
-	  @   ensures	(\exists int x; 0 <= x && x < keys[hash(key)].length; 
-	  @					keys[hash(key)][x].equals(key)
-	  @					&& (\forall int y; 0 <= y && y <= keys[hash(key)].length;
-	  @						keys[hash(key)][y].equals(key) ==> (x == y)));
 	  @   
 	  @   //The amount of elements in the hash table (called n) is now either n or n+1.
 	  @   ensures	((n == \old(n)) <=!=> (n == \old(n) + 1));
@@ -253,10 +279,10 @@ public class SeparateChainingArray {
 		// resize(2 * m, len);
 
 		int i = hash(key);
-		int j = getIndex(i, key);
+		int p = getIndex(i, key);
 
-		if (j != -1) {
-			vals[i][j] = val;
+		if (p != -1) {
+			vals[i][p] = val;
 			return;
 		}
 
