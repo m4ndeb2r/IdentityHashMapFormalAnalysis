@@ -158,9 +158,12 @@ public class SeparateChainingArray {
 	  @ public normal_behavior
 	  @   requires	true;
 	  @
-	  @   ensures	(\result != null) <==
+	  @   ensures	(\result != null) ==>
       @   				(\exists int y; 0 <= y && y < keys[hash(key)].length;
 	  @						key.equals(keys[hash(key)][y]) && vals[hash(key)][y] == \result);
+	  @   ensures	(\result == null) ==> 
+      @					(\forall int y; 0 <= y && y < keys[hash(key)].length;
+	  @						!(key.equals(keys[hash(key)][y])));
 	  @   
 	  @   assignable	\strictly_nothing;
 	  @
@@ -382,8 +385,11 @@ public class SeparateChainingArray {
 	/*@ public normal_behavior
 	  @   requires	true;
 	  @   ensures	(\forall HashObject o; key.equals(o) 
-	  @					==> (\result == (abs(o.hashCode()) % chains)))
+	  @					==> (\result == hash(o)))
 	  @				&& 0 <= \result && \result < chains;
+	  @   ensures_free	\result == hash(key);
+	  @   assignable	\strictly_nothing;
+	  @   accessible	key.value, chains;
 	  @*/
 	private /*@ strictly_pure @*/ int hash(HashObject key) {
 		return abs(key.hashCode()) % chains;
@@ -417,9 +423,8 @@ public final class HashObject {
 		return value;
 	}
 
-	public final /*@ strictly_pure @*/ boolean equals(Object otherObject) {
-		if (this == otherObject) return true;
-		if (otherObject == null || !(otherObject instanceof HashObject)) return false;
+	public final /*@ strictly_pure @*/ boolean equals(/*@ nullable @*/ Object otherObject) {
+		if (!(otherObject instanceof HashObject)) return false;
 		return this.value == ((HashObject) otherObject).getValue();
 	}
 }
