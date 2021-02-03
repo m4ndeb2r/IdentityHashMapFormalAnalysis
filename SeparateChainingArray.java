@@ -20,8 +20,8 @@ public class SeparateChainingArray {
 	  @ //The hash table cant have a negative amount of elements.
 	  @ instance invariant	pairs >= 0;
 	  @
-	  @ //The arrays keys and vals are nonnull.
-	  @ instance invariant	keys != null && vals != null;
+	  @ //The arrays keys and vals are nonnull and are two different arrays.
+	  @ instance invariant	keys != null && vals != null && keys != vals;
 	  @
 	  @ // The arrays keys and vals are equally long.
 	  @ instance invariant	chains == vals.length && chains == keys.length;
@@ -40,10 +40,14 @@ public class SeparateChainingArray {
 	  @								keys[x][y] != null && vals[x][y] != null));
 	  @
 	  @ //No two different postion in keys or vals have a reference to the same subarray. 
-	  @ //   (No arrays aliasing)
 	  @ instance invariant	(\forall int x; 0 <= x && x < chains;
 	  @							(\forall int y; x < y && y < chains;
 	  @								keys[x] != keys[y] && vals[x] != vals[y]));
+	  @
+	  @ //No array in keys appears in vals.
+	  @ instance invariant	(\forall int x; 0 <= x && x < chains;
+	  @							(\forall int y; 0 <= y && y < chains;
+	  @ 							keys[x] != vals[y]));
 	  @
 	  @ //Each Key is in its correct bucket.
 	  @ instance invariant	(\forall int x; 0 <= x && x < chains;
@@ -55,6 +59,13 @@ public class SeparateChainingArray {
 	  @							(\forall int y; 0 <= y && y < keys[x].length;
 	  @								(\forall int z; 0 <= z && z < keys[x].length;
 	  @									keys[x][z].equals(keys[x][y]) ==> (y == z))));
+	  @
+	  @ //
+	  @ //instance invariant	(\forall int w; 0 <= w && w < chains;
+	  @	//						(\forall int x; 0 <= x && x < chains;
+	  @	//							(\forall int y; 0 <= y && y < keys[w].length;
+	  @	//								(\forall int z; 0 <= z && z < vals[x].length;
+	  @	//									keys[w][y] != vals[x][z]))));
 	  @*/
 
 	/**
@@ -83,34 +94,54 @@ public class SeparateChainingArray {
 
 	/*@ public normal_behavior
 	  @   requires 	0 <= valueH && valueH < chains;
-	  @ 
-	  @   //The result is -1 if and only if the given key is not in the hash table.
+	  @
+	  @   @   //The result is -1 if and only if the given key is not in the hash table.
 	  @   ensures	(\result == -1) <==>
 	  @					(\forall int x; 0 <= x && x < keys[valueH].length; 
-	  @						!(keys[valueH][x].equals(key)));
+	  @						!(key.equals(keys[valueH][x])));
 	  @
 	  @   //The result is not -1 if and only if the given key is in the hash table 
 	  @   //	and the result is postion of the key.
 	  @   ensures	(\result != -1) <==> 
 	  @					(0 <= \result && \result < keys[valueH].length 
-	  @					&& keys[valueH][\result].equals(key));
-	  @
-	  @   assignable	\strictly_nothing;
+	  @					&& key.equals(keys[valueH][\result]));
 	  @*/
-	private int getIndex(int valueH, HashObject key) {
+	private /*@ strictly_pure @*/ int getIndex(int valueH, HashObject key) {
 		/*@ //Every postion in the array up until now didnt include the key.
 		  @ //	This is always true, since the method terminates if the key is found.
 		  @ loop_invariant	0 <= j && j <= keys[valueH].length &&
-		  @					(\forall int x; 0 <= x && x < j; !(keys[valueH][x].equals(key)));
+		  @					(\forall int x; 0 <= x && x < j; !(key.equals(keys[valueH][x])));
 		  @ assignable	\strictly_nothing;
 		  @ decreases	keys[valueH].length - j;
 		  @*/
 		for (int j = 0; j < keys[valueH].length; j++) {
-			if (keys[valueH][j].equals(key)) {
+			if (key.equals(keys[valueH][j])) {
 				return j;
 			}
 		}
 		return -1;
+	}
+	
+	/*@ public normal_behavior
+	  @   requires 	0 <= valueH && valueH < chains;
+	  @   ensures	\result <==> 
+	  @					(\exists int x; 0 <= x && x < keys[valueH].length; 
+	  @						(key.equals(keys[valueH][x])));
+	  @*/
+	private /*@ strictly_pure @*/ boolean contains(int valueH, HashObject key) {
+		/*@ //Every postion in the array up until now didnt include the key.
+		  @ //	This is always true, since the method terminates if the key is found.
+		  @ loop_invariant	0 <= j && j <= keys[valueH].length &&
+		  @					(\forall int x; 0 <= x && x < j; !(key.equals(keys[valueH][x])));
+		  @ assignable	\strictly_nothing;
+		  @ decreases	keys[valueH].length - j;
+		  @*/
+		for (int j = 0; j < keys[valueH].length; j++) {
+			if (key.equals(keys[valueH][j])) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -127,24 +158,10 @@ public class SeparateChainingArray {
 	  @ public normal_behavior
 	  @   requires	true;
 	  @
-	  @   //The result is not null if and only if the given key is in the hash table 
-	  @   //	and the result is the Value at the same postion.
-	  @	  //	getIndex needs to ensure, that the key is in the table or not?
-	  @	  //	We could use getIndex or a new contains to obscure the data layout.
-	  @   //	What if two keys have the same value (==)?
-	  @   ensures	(\result != null) ==> (getIndex(hash(key), key) >= 0
-	  @					&& getIndex(hash(key), key) < vals[hash(key)].length
-	  @					&& \result == vals[hash(key)][getIndex(hash(key), key)]);
-	  @   ensures	(\result != null) <== (getIndex(hash(key), key) >= 0
-	  @					&& getIndex(hash(key), key) < vals[hash(key)].length
-	  @					&& \result == vals[hash(key)][getIndex(hash(key), key)]);
-	  @
-	  @	  //We already know that no value can be null (invariant), so we need a diffrent
-	  @	  //	if the result is null.
-	  @   //The result is null if and only if the given key is not in the hash table.
-	  @   ensures	(\result == null) ==> (getIndex(hash(key), key) == -1);
-	  @   ensures	(\result == null) <== (getIndex(hash(key), key) == -1);
-	  @
+	  @   ensures	(\result != null) <==
+      @   				(\exists int y; 0 <= y && y < keys[hash(key)].length;
+	  @						key.equals(keys[hash(key)][y]) && vals[hash(key)][y] == \result);
+	  @   
 	  @   assignable	\strictly_nothing;
 	  @
 	  @ also
@@ -212,8 +229,9 @@ public class SeparateChainingArray {
 	  @ public normal_behavior
 	  @   requires	keysTemp != null;
 	  @   requires	\typeof(keysTemp) == \type(HashObject[]);
-	  @	  requires	0 <= i && i < chains;
-	  @	  requires	keysTemp != keys[i];
+	  @   requires	0 <= i && i < chains;
+	  @   requires	keysTemp != keys[i];
+	  @   requires	\typeof(keysTemp) == \typeof(keys[i]);
 	  @   requires	0 <= srcPos && srcPos < keys[i].length;
 	  @   requires	0 <= destPos && destPos < keysTemp.length;
 	  @   requires	0 <= length && length + srcPos <= keys[i].length 
@@ -383,7 +401,7 @@ public class SeparateChainingArray {
 	}
 }
 
-public class HashObject {
+public final class HashObject {
 
 	private final int value;
 
@@ -399,9 +417,9 @@ public class HashObject {
 		return value;
 	}
 
-	public final /*@ strictly_pure @*/ boolean equals(/*@ nullable @*/ Object otherObject) {
-		if (!(otherObject instanceof HashObject))
-			return false;
+	public final /*@ strictly_pure @*/ boolean equals(Object otherObject) {
+		if (this == otherObject) return true;
+		if (otherObject == null || !(otherObject instanceof HashObject)) return false;
 		return this.value == ((HashObject) otherObject).getValue();
 	}
 }
