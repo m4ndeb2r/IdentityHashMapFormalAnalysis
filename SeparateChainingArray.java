@@ -59,13 +59,6 @@ public class SeparateChainingArray {
 	  @							(\forall int y; 0 <= y && y < keys[x].length;
 	  @								(\forall int z; 0 <= z && z < keys[x].length;
 	  @									keys[x][z].equals(keys[x][y]) ==> (y == z))));
-	  @
-	  @ //
-	  @ //instance invariant	(\forall int w; 0 <= w && w < chains;
-	  @	//						(\forall int x; 0 <= x && x < chains;
-	  @	//							(\forall int y; 0 <= y && y < keys[w].length;
-	  @	//								(\forall int z; 0 <= z && z < vals[x].length;
-	  @	//									keys[w][y] != vals[x][z]))));
 	  @*/
 
 	/**
@@ -93,20 +86,20 @@ public class SeparateChainingArray {
 	}
 
 	/*@ public normal_behavior
-	  @   requires 	0 <= valueH && valueH < chains;
+	  @   requires 	0 <= valueH && valueH < chains && \invariant_for(this);
 	  @
-	  @   @   //The result is -1 if and only if the given key is not in the hash table.
-	  @   ensures	(\result == -1) <==>
+	  @   //The result is -1 if and only if the given key is not in the hash table.
+	  @   ensures	(\result == -1) ==>
 	  @					(\forall int x; 0 <= x && x < keys[valueH].length; 
 	  @						!(key.equals(keys[valueH][x])));
 	  @
 	  @   //The result is not -1 if and only if the given key is in the hash table 
 	  @   //	and the result is postion of the key.
-	  @   ensures	(\result != -1) <==> 
+	  @   ensures	(\result != -1) ==> 
 	  @					(0 <= \result && \result < keys[valueH].length 
 	  @					&& key.equals(keys[valueH][\result]));
 	  @*/
-	private /*@ strictly_pure @*/ int getIndex(int valueH, HashObject key) {
+	private /*@ strictly_pure @*/ int /*@ helper*/ getIndex(int valueH, HashObject key) {
 		/*@ //Every postion in the array up until now didnt include the key.
 		  @ //	This is always true, since the method terminates if the key is found.
 		  @ loop_invariant	0 <= j && j <= keys[valueH].length &&
@@ -124,9 +117,12 @@ public class SeparateChainingArray {
 	
 	/*@ public normal_behavior
 	  @   requires 	0 <= valueH && valueH < chains;
-	  @   ensures	\result <==> 
+	  @   ensures	\result ==> 
 	  @					(\exists int x; 0 <= x && x < keys[valueH].length; 
 	  @						(key.equals(keys[valueH][x])));
+	  @   ensures	!\result ==> 
+	  @					(\forall int x; 0 <= x && x < keys[valueH].length; 
+	  @						!(key.equals(keys[valueH][x])));
 	  @*/
 	private /*@ strictly_pure @*/ boolean contains(int valueH, HashObject key) {
 		/*@ //Every postion in the array up until now didnt include the key.
@@ -156,7 +152,7 @@ public class SeparateChainingArray {
 	 */
 	/*@
 	  @ public normal_behavior
-	  @   requires	true;
+	  @   requires	\invariant_for(this);
 	  @
 	  @   ensures	(\result != null) ==>
       @   				(\exists int y; 0 <= y && y < keys[hash(key)].length;
@@ -173,7 +169,7 @@ public class SeparateChainingArray {
 	  @   signals_only	IllegalArgumentException;
 	  @   signals	(IllegalArgumentException e) true;
 	  @*/
-	public /*@ pure @*/ /*@ nullable @*/ Object get(HashObject key) {
+	public /*@ pure @*/ /*@ nullable @*/ Object /*@ helper*/ get(HashObject key) {
 		if (key == null)
 			throw new IllegalArgumentException("argument to get() is null");
 
@@ -383,22 +379,22 @@ public class SeparateChainingArray {
 
 	// hash function for keys - returns value between 0 and chains-1
 	/*@ public normal_behavior
-	  @   requires	true;
+	  @   requires	chains > 0;
 	  @   ensures	(\forall HashObject o; key.equals(o) 
 	  @					==> (\result == hash(o)))
 	  @				&& 0 <= \result && \result < chains;
-	  @   ensures_free	\result == hash(key);
+	  @   //ensures_free	\result == hash(key);
 	  @   assignable	\strictly_nothing;
-	  @   accessible	key.value, chains;
+	  @   //accessible	key.*, this.chains;
 	  @*/
-	private /*@ strictly_pure @*/ int hash(HashObject key) {
+	private /*@ strictly_pure @*/ int /*@ helper*/ hash(HashObject key) {
 		return abs(key.hashCode()) % chains;
 	}
 
 	//Returns the absolute value of the given number.
-	//Unless the numbr is Integer.MIN_VALUE, then it return 0,
-	//since in java there is no absolute value for this. 
-	private int abs(int number) {
+	//Unless the number is Integer.MIN_VALUE, then it return 0,
+	//since in java there is no absolute value for this.
+	private int /*@ helper*/ abs(int number) {
 		if (number == Integer.MIN_VALUE)
 			return 0;
 		if (number < 0)
