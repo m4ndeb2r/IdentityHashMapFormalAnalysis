@@ -23,6 +23,11 @@ public class SeparateChainingArray {
 	  @ //The arrays keys and vals are nonnull and are two different arrays.
 	  @ instance invariant	keys != null && vals != null && keys != vals;
 	  @
+	  @ //The arrays keys and vals are not suptypes.
+	  @ //It limits vals a bit, but helps verification.
+	  @ instance invariant	\typeof(keys) == \type(HashObject[][]) 
+	  @						&& \typeof(vals) == \type(Object[][]);
+	  @
 	  @ // The arrays keys and vals are equally long.
 	  @ instance invariant	chains == vals.length && chains == keys.length;
 	  @
@@ -33,11 +38,6 @@ public class SeparateChainingArray {
 	  @ // Each array inside of keys has an equally long partner array in vals at the same postion
 	  @ instance invariant	(\forall int x; 0 <= x && x < chains;
 	  @							keys[x].length == vals[x].length);
-	  @ 
-	  @ //Every element in keys[] or vals[] is nonnull.
-	  @ instance invariant	(\forall int x; 0 <= x && x < chains;
-	  @							(\forall int y; 0 <= y && y < keys[x].length;
-	  @								keys[x][y] != null && vals[x][y] != null));
 	  @
 	  @ //No two different postion in keys or vals have a reference to the same subarray. 
 	  @ instance invariant	(\forall int x; 0 <= x && x < chains;
@@ -49,12 +49,18 @@ public class SeparateChainingArray {
 	  @							(\forall int y; 0 <= y && y < chains;
 	  @ 							keys[x] != vals[y]));
 	  @
+	  @ //Every element in keys[] or vals[] is nonnull.
+	  @ instance invariant	(\forall int x; 0 <= x && x < chains;
+	  @							(\forall int y; 0 <= y && y < keys[x].length;
+	  @								keys[x][y] != null && vals[x][y] != null));
+	  @
 	  @ //Each Key is in its correct bucket.
 	  @ instance invariant	(\forall int x; 0 <= x && x < chains;
 	  @							(\forall int y; 0 <= y && y < keys[x].length;
 	  @								x == hash(keys[x][y])));
 	  @
 	  @ //Each key is at most ones in the hash table.
+	  @ //Only needs to check the same bucket because of the previous invariant.
 	  @ instance invariant	(\forall int x; 0 <= x && x < chains;
 	  @							(\forall int y; 0 <= y && y < keys[x].length;
 	  @								(\forall int z; 0 <= z && z < keys[x].length;
@@ -183,76 +189,48 @@ public class SeparateChainingArray {
 		return null;
 	}
 	
-	//RunTimeExceptions
-	//IndexOutOfBoundsException - if copying would cause access of data outside array bounds.
-	//NullPointerException - if either src or dest is null.
 	/*@
 	  @ public normal_behavior
-	  @   requires	keysTemp != null && valsTemp != null;
-	  @   requires	keysTemp != keys[valueH] && keysTemp != vals[valueH]
-	  @				&& keysTemp != valsTemp && valsTemp != vals[valueH];
+	  @   requires	\invariant_for(this);
+	  @
+	  @   requires	keysTemp != null && valsTemp != null && keysTemp != valsTemp;
 	  @   requires	keysTemp.length == valsTemp.length;
-	  @   requires	\typeof(keysTemp) == \type(HashObject[]);
-	  @   requires	\typeof(keysTemp) == \typeof(keys[valueH])
-	  @				&& \typeof(valsTemp) == \typeof(vals[valueH]);
-	  @	  requires	0 <= valueH && valueH < chains;
-	  @   requires	0 <= srcPos && srcPos < keys[valueH].length;
+	  @   requires	\typeof(keysTemp) == \type(HashObject[]) && \typeof(valsTemp) == \type(Object[]);
+	  @   requires	\typeof(keysTemp) == \typeof(keys[iHash])
+	  @				&& \typeof(valsTemp) == \typeof(vals[iHash]);
+	  @
+	  @   requires	(\forall int x; 0 <= x && x < chains;
+	  @					keysTemp != keys[x] && keysTemp != vals[x]
+	  @					&& valsTemp != keys[x] && valsTemp != vals[x]);
+	  @
+	  @	  requires	0 <= iHash && iHash < chains;
+	  @   requires	0 <= srcPos && srcPos < keys[iHash].length;
 	  @   requires	0 <= destPos && destPos < keysTemp.length;
-	  @   requires	0 <= length && length + srcPos <= keys[valueH].length 
+	  @   requires	0 <= length && length + srcPos <= keys[iHash].length 
 	  @				&& length + destPos <= keysTemp.length;
+	  @
 	  @   ensures	(\forall int x; 0 <= x && x < length; 
-	  @					keysTemp[destPos + x] == keys[valueH][srcPos + x]
-	  @					&& valsTemp[destPos + x] == vals[valueH][srcPos + x]);
+	  @					keysTemp[destPos + x] == keys[iHash][srcPos + x]
+	  @					&& valsTemp[destPos + x] == vals[iHash][srcPos + x]);
+	  @
 	  @   assignable	valsTemp[destPos .. destPos+length-1], keysTemp[destPos .. destPos+length-1];
 	  @*/
-	private void arrayCopy(HashObject[] keysTemp, Object[] valsTemp, int valueH, int srcPos, int destPos, int length) {
+	private void /*@ helper*/ arrayCopy(HashObject[] keysTemp, Object[] valsTemp, int iHash, int srcPos, int destPos, int length) {
 		/*@ //The arrays are a copys of the other arrays up until this point.
 		  @ loop_invariant	0 <= k && k <= length &&
 		  @					(\forall int x; 0 <= x && x < k; 
-		  @						keysTemp[destPos + x] == keys[valueH][srcPos + x] 
-		  @						&& valsTemp[destPos + x] == vals[valueH][srcPos + x]);
+		  @						keysTemp[destPos + x] == keys[iHash][srcPos + x] 
+		  @						&& valsTemp[destPos + x] == vals[iHash][srcPos + x]);
 		  @ assignable	valsTemp[destPos .. destPos+length-1], keysTemp[destPos .. destPos+length-1];
 		  @ decreases	length - k;
 		  @*/
 		for (int k = 0; k < length; k++) {
-			keysTemp[destPos + k] = keys[valueH][srcPos + k];
-			valsTemp[destPos + k] = vals[valueH][srcPos + k];
+			keysTemp[destPos + k] = keys[iHash][srcPos + k];
+			valsTemp[destPos + k] = vals[iHash][srcPos + k];
 		}
 		return;
 	}
 	
-	//RunTimeExceptions
-	//IndexOutOfBoundsException - if copying would cause access of data outside array bounds.
-	//NullPointerException - if either src or dest is null.
-	/*@
-	  @ public normal_behavior
-	  @   requires	keysTemp != null;
-	  @   requires	\typeof(keysTemp) == \type(HashObject[]);
-	  @   requires	0 <= i && i < chains;
-	  @   requires	keysTemp != keys[i];
-	  @   requires	\typeof(keysTemp) == \typeof(keys[i]);
-	  @   requires	0 <= srcPos && srcPos < keys[i].length;
-	  @   requires	0 <= destPos && destPos < keysTemp.length;
-	  @   requires	0 <= length && length + srcPos <= keys[i].length 
-	  @				&& length + destPos <= keysTemp.length;
-	  @   ensures	(\forall int x; 0 <= x && x < length; 
-	  @					keysTemp[destPos + x] == keys[i][srcPos + x]);
-	  @   assignable	keysTemp[destPos .. destPos+length-1];
-	  @*/
-	private void arrayCopy(HashObject[] keysTemp, int i ,int srcPos, int destPos, int length) {
-		/*@ //The arrays are a copys of the other arrays up until this point.
-		  @ loop_invariant	0 <= k && k <= length &&
-		  @					(\forall int x; 0 <= x && x < k; 
-		  @						keysTemp[destPos + x] == keys[i][srcPos + x]);
-		  @ assignable	keysTemp[destPos .. destPos+length-1];
-		  @ decreases	length - k;
-		  @*/
-		for (int k = 0; k < length; k++) {
-			keysTemp[destPos + k] = keys[i][srcPos + k];
-		}
-		return;
-	}
-
 	/**
 	 * Inserts the specified key-value pair into the hash table, overwriting the old
 	 * value with the new value if the hash table already contains the specified
@@ -383,7 +361,7 @@ public class SeparateChainingArray {
 	  @   ensures	(\forall HashObject o; key.equals(o) 
 	  @					==> (\result == hash(o)))
 	  @				&& 0 <= \result && \result < chains;
-	  @   //ensures_free	\result == hash(key);
+	  @   ensures_free	\result == hash(key);
 	  @   assignable	\strictly_nothing;
 	  @   //accessible	key.*, this.chains;
 	  @*/
