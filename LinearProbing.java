@@ -4,15 +4,21 @@
  * the hash table, the convention is to replace the old value with the new value.
  */
 public class LinearProbingHash {
+	
+	//Note: In the orginal Version, after a delete() call, all Key-Value pairs
+	//got relocated, so between two key with the same hashvalue is now no null 
+	//entry. While this is more efficent, it also makes the specification and 
+	//verification harder. And it also needed the resize() methode. 
+	//So for now I don't use it.
 
 	private static final int INIT_CAPACITY = 8;
 
-	private int pairs; 				// number of key-value pairs
-	private int buckets; 			// size of linear probing table
-	private HashObject[] keys; 		// the keys
-	private Object[] vals; 			// the values
+	private int pairs; 									// number of key-value pairs
+	private int buckets; 								// size of linear probing table
+	private /*@ nullable @*/ HashObject[] keys; 		// the keys
+	private /*@ nullable @*/ Object[] vals; 			// the values
 
-	/*@ // The hash table has at least one chain.
+	/*@ // The hash table has at least one bucket.
 	  @ instance invariant	buckets > 0;
 	  @
 	  @ //The arrays keys and vals are nonnull and are two different arrays.
@@ -25,16 +31,22 @@ public class LinearProbingHash {
 	  @						&& \typeof(vals) == \type(Object[]);
 	  @
 	  @ // The arrays keys and vals are equally long.
-	  @ instance invariant	buckets == vals.length && buckets == keys.length;
+	  @ instance invariant	buckets == keys.length && buckets == vals.length;
 	  @
 	  @ //The hash table cant have a negative amount of elements.
-	  @ //instance invariant	pairs == (\num_of int x; 0 <= x && x < keys.length; keys[x] != null);
-	  @ //instance invariant	0 <= pairs && pairs < buckets;
+	  @ //Doesn't work at the moment.
+	  @ //instance invariant	pairs == (\num_of int x; 0 <= x && x < buckets; keys[x] != null);
+	  @
 	  @
 	  @ //Each key is at most ones in the hash table.
-	  @ instance invariant	(\forall int y; 0 <= y && y < keys.length && keys[y] != null;
-	  @							(\forall int z; 0 < z && z < keys.length && keys[z] != null;
+	  @ instance invariant	(\forall int y; 0 <= y && y < buckets && keys[y] != null;
+	  @							(\forall int z; 0 < z && z < buckets && keys[z] != null;
 	  @								keys[z].equals(keys[y]) ==> (z == y)));
+	  @
+	  @ //If a key is not null, then the value is also not null.
+	  @ //	This is important for get(), since it returns null if the key is not in the table.
+	  @ instance invariant	(\forall int x; 0 <= x && x < buckets;
+	  @								(keys[x] != null) ==> (vals[x] != null));
 	  @*/
 
     /**
@@ -62,23 +74,24 @@ public class LinearProbingHash {
     // hash function for keys - returns value between 0 and buckets-1
 	/*@ public normal_behavior
 	  @   requires	buckets > 0;
-	  @   ensures	(\forall HashObject o; key.equals(o) 
-	  @					==> (\result == hash(o)))
+	  @   ensures	(\forall HashObject ho; key.equals(ho) 
+	  @					==> (\result == hash(ho)))
 	  @				&& 0 <= \result && \result < buckets;
 	  @   ensures_free	\result == hash(key);
 	  @   assignable	\strictly_nothing;
 	  @   accessible	key.value, this.buckets;
+	  @
+	  @ helper
 	  @*/
-	private /*@ strictly_pure @*/ int /*@ helper*/ hash(HashObject key) {
-		//return (key.hashCode() * key.hashCode()) % buckets;
+	private /*@ strictly_pure @*/ int hash(HashObject key) {
 		return abs(key.hashCode()) % buckets;
-		//return ((key.hashCode() % buckets) + buckets) % buckets;
 	}
 
 	//Returns the absolute value of the given number.
 	//Unless the number is Integer.MIN_VALUE, then it return 0,
 	//since in java there is no absolute value for this.
-	private int /*@ helper*/ abs(int number) {
+	/*@ helper*/
+	private int abs(int number) {
 		if (number == Integer.MIN_VALUE)
 			return 0;
 		if (number < 0)
@@ -86,14 +99,19 @@ public class LinearProbingHash {
 		return number;
 	}
 
+	//Returns the index of the given key, if the key is in the hash table.
+	//	It starts its search from iHash which is the hash-value of the key.
+	//  This is to essential to the hashtable concept.
+	//	I originally used one loop with the modulo operator, but the 
+	//	current two loop version is easier to verifiy.
+	//Otherwise returns -1.
 	/*@ public normal_behavior
-	  @   requires 	0 <= iHash && iHash < buckets && \invariant_for(this);
-	  @		//Is key still nonnull if the method is a helper?
+	  @   requires 	0 <= iHash && iHash < buckets;
 	  @
 	  @   //If the result is -1 the given key is not in the hash table.
 	  @   ensures	(\result == -1) ==>
 	  @					(\forall int x; 0 <= x && x < buckets; 
-	  @						!(key.equals(keys[(x + iHash) % buckets])));
+	  @						!(key.equals(keys[x])));
 	  @
 	  @   //If the result is not -1 the given key is in the hash table 
 	  @   //	and the result is the postion of the key.
@@ -101,39 +119,51 @@ public class LinearProbingHash {
 	  @					(0 <= \result && \result < buckets
 	  @					&& key.equals(keys[\result]));
 	  @*/
-	private /*@ strictly_pure @*/ int /*@ helper*/ getIndex(int iHash, HashObject key) {
-		//Note: In the orginal Version, after a delete() call, all Key-Value pairs
-		//got relocated, so between two key with the same hashvalue is now null 
-		//entry. While this is more efficent, it also makes the specification and 
-		//verification harder. So for now I don't use it.
-		
-		int index;
+	private /*@ strictly_pure @*/ int getIndex(int iHash, HashObject key) {
+		/*@ //Every postion in the array up until now didnt include the key.
+		  @ //	This is always true, since the method terminates if the key is found.
+		  @ loop_invariant	iHash <= j && j <= buckets &&
+		  @					(\forall int x; iHash <= x && x < j; 
+		  @						!(key.equals(keys[x])));
+		  @ assignable	\strictly_nothing;
+		  @ decreases	buckets - j;
+		  @*/
+		for (int j = iHash; j < buckets; j++) {
+			if (key.equals(keys[j])) {
+				return j;
+			}
+		}
 		
 		/*@ //Every postion in the array up until now didnt include the key.
 		  @ //	This is always true, since the method terminates if the key is found.
-		  @ loop_invariant	0 <= j && j <= keys.length &&
-		  @					(\forall int x; 0 <= x && x < j; 
-		  @						!(key.equals(keys[(x + iHash) % buckets])));
+		  @ loop_invariant	0 <= k && k <= iHash &&
+		  @					(\forall int x; 0 <= x && x < k; 
+		  @						!(key.equals(keys[x])));
 		  @ assignable	\strictly_nothing;
-		  @ decreases	keys.length - j;
+		  @ decreases	iHash - k;
 		  @*/
-		for (int j = 0; j < keys.length; j++) {
-			index = (j + iHash) % buckets;
-			if (key.equals(keys[index])) {
-				return index;
+		for (int k = 0; k < iHash; k++) {
+			if (key.equals(keys[k])) {
+				return k;
 			}
 		}
 		
 		return -1;
 	}
 	
+	//Returns the index of an null-entry, if one is in the hash table.
+	//	It starts its search from iHash which is the hash-value of a key.
+	//  This is to essential to the hashtable concept.
+	//	I originally used one loop with the modulo operator, but the 
+	//	current two loop version is easier to verifiy.
+	//Otherwise returns -1.
 	/*@ public normal_behavior
-	  @   requires 	0 <= iHash && iHash < buckets && \invariant_for(this);
+	  @   requires 	0 <= iHash && iHash < buckets;
 	  @
 	  @   //If the result is -1, no bucket in keys is null.
 	  @   ensures	(\result == -1) ==>
-	  @					(\forall int x; 0 <= x && x < keys.length; 
-	  @						keys[(x + iHash) % buckets] != null);
+	  @					(\forall int x; 0 <= x && x < buckets; 
+	  @						keys[x] != null);
 	  @
 	  @   //If the result is not -1, at least one bucket in keys is null
 	  @   //	and the result is postion of this bucket.
@@ -141,32 +171,53 @@ public class LinearProbingHash {
 	  @   ensures	(\result != -1) ==> 
 	  @					(0 <= \result && \result < buckets
 	  @					&& keys[\result] == null);
-	  @					//&& (iHash <= \result) ==> (\forall int x; iHash <= x && x < \result;
-	  @						//						keys[x] != null)
-	  @					//&& (iHash > \result) ==> ((\forall int x; iHash <= x && x < buckets;
-	  @						//						keys[x] != null)
-	  @							//				 && (\forall int x; 0 <= x && x < \result;
-	  @								//				keys[x] != null)));
 	  @*/
-	private /*@ strictly_pure @*/ int /*@ helper*/ findEmpty(int iHash) {
-		int index;
+	private /*@ strictly_pure @*/ int findEmpty(int iHash) {		
+		/*@ //Every postion in the array up until now is not null.
+		  @ //	This is always true, since the method terminates if a null bucket is found.
+		  @ loop_invariant	iHash <= j && j <= buckets &&
+		  @					(\forall int x; iHash <= x && x < j; 
+		  @						keys[x] != null);
+		  @ assignable	\strictly_nothing;
+		  @ decreases	buckets - j;
+		  @*/
+		for (int j = iHash; j < buckets; j++) {
+			if (keys[j] == null) {
+				return j;
+			}
+		}
 		
 		/*@ //Every postion in the array up until now is not null.
 		  @ //	This is always true, since the method terminates if a null bucket is found.
-		  @ loop_invariant	0 <= j && j <= keys.length &&
-		  @					(\forall int x; 0 <= x && x < j; 
-		  @						keys[(x + iHash) % buckets] != null);
+		  @ loop_invariant	0 <= k && k <= iHash &&
+		  @					(\forall int x; 0 <= x && x < k; 
+		  @						keys[x] != null);
 		  @ assignable	\strictly_nothing;
-		  @ decreases	keys.length - j;
+		  @ decreases	iHash - k;
 		  @*/
-		for (int j = 0; j < keys.length; j++) {
-			index = (j + iHash) % buckets;
-			if (keys[index] == null) {
-				return index;
+		for (int k = 0; k < iHash; k++) {
+			if (keys[k] == null) {
+				return k;
 			}
 		}
 		
 		return -1;
+	}
+	
+	//Simply overwrites key-value. This is a method, because it is difficult
+	//to verifiy this part of the hash table, specifically the invariants.
+	/*@ public normal_behavior
+	  @   requires	key != null && val != null;
+	  @   requires	0 <= index && index < buckets;
+	  @   requires	(getIndex(index, key) == -1);
+	  @
+	  @   ensures	keys[index] == key && vals[index] == val;
+	  @
+	  @   assignable	keys[index], vals[index];
+	  @*/
+	private void overwritePair(HashObject key, Object val, int index) {
+		keys[index] = key;
+		vals[index] = val;
 	}
 
 	/**
@@ -180,18 +231,16 @@ public class LinearProbingHash {
 	 *             if key is null
 	 */
 	/*@ public normal_behavior
-	  @   requires	\invariant_for(this);
-	  @
 	  @   //If the result is not null, the key is in keys
 	  @   //	and the result is at the same postion in vals.
 	  @   ensures	(\result != null) ==>
-      @   				(\exists int y; 0 <= y && y < keys.length;
+      @   				(\exists int y; 0 <= y && y < buckets;
 	  @						key.equals(keys[y]) && vals[y] == \result);
 	  @
 	  @   //If the result is null, the key is not in keys.
 	  @   ensures	(\result == null) ==> 
-      @					(\forall int y; 0 <= y && y < keys.length;
-	  @						!(key.equals(keys[(y + hash(key)) % buckets])));
+      @					(\forall int x; 0 <= x && x < buckets;
+	  @						!(key.equals(keys[x])));
 	  @   
 	  @   assignable	\strictly_nothing;
 	  @
@@ -201,7 +250,7 @@ public class LinearProbingHash {
 	  @   signals_only	IllegalArgumentException;
 	  @   signals	(IllegalArgumentException e) true;
 	  @*/
-    public /*@ pure @*/ /*@ nullable @*/ Object /*@ helper*/ get(HashObject key) {
+    public /*@ pure @*/ /*@ nullable @*/ Object get(HashObject key) {
 		if (key == null)
 			throw new IllegalArgumentException("argument to get() is null");
 
@@ -226,35 +275,9 @@ public class LinearProbingHash {
 	 *             if key or val is null
 	 */
 	/*@ public normal_behavior
-	  @   requires	true;
-	  @   
-	  @   //The amount of elements in the hash table (called pairs) is now either pairs or pairs+1.
-	  @   ensures	(pairs == \old(pairs)) || (pairs == \old(pairs) + 1);
-	  @   
-	  @   //If pairs is now pairs, then the key was and still is in the table and 
-	  @   //	the given value is at this postion OR position hash(key) got overwriten.
-	  @   //	The current contract might not hold if resize is used, 
-	  @   //	since the contract requires that the keys postion did not change.
-	  @   ensures	(\exists int x; 0 <= x && x < keys.length;
-	  @						\old(key.equals(keys[x])) ==> (key.equals(keys[x]) && vals[x] == val));
-	  @
-	  @   ensures	(\forall int x; 0 <= x && x < keys.length; 
-	  @					!\old(key.equals(keys[x])))
-	  @				==> (keys[hash(key)] == key && vals[hash(key)] == val);
-	  @   
-	  @   //If pairs is now pairs+1, then there was a bucket in keys and vals that was null
-	  @   //	and is now key and val.
-	  @   //It is no guarantee that this bucket is the "nearest" to hash(key).
-	  @   ensures	(pairs == \old(pairs) + 1) ==>
-	  @					(\exists int x; 0 <= x && x < keys.length;
-	  @						key.equals(keys[x]) && \old(keys[x] == null)
-	  @						&& vals[x] == val);
-	  @						//&& (hash(key) < x) ==> (\forall int y; hash(key) <= y && y < x;
-	  @						//								keys[y] != null)
-	  @						//&& (hash(key) > x) ==> ((\forall int y; hash(key) <= y && y < buckets;
-	  @						//								keys[y] != null)
-	  @						//					 		 && (\forall int y; 0 <= y && y < x;
-	  @						//								keys[y] != null)));
+	  @   //The key-value pair is now in the hash table and at the same position. 
+	  @   ensures	(\exists int x; 0 <= x && x < buckets;
+	  @					key.equals(keys[x]) && vals[x] == val);   
 	  @
 	  @   //The method has no effect on hash table positions were the key isn't placed.
 	  @   ensures	(\forall int x; 0 <= x && x < buckets && !key.equals(keys[x]);
@@ -273,27 +296,23 @@ public class LinearProbingHash {
 		if (val == null) throw new IllegalArgumentException("second argument to put() is null");
 
 		int iHash = hash(key);
+		int indexCopy = getIndex(iHash, key);
 		
-		if (contains(key)) {
-			int i = getIndex(iHash, key);
-			if (i == -1) throw new IllegalArgumentException("nope");
-			vals[i] = val;
+		if (indexCopy != -1) {
+			vals[indexCopy] = val;
 			return;
 		}
 		
-		int index = findEmpty(iHash);
+		int indexNull = findEmpty(iHash);
 		
-		if (index != -1) {
-			keys[index] = key;
-			vals[index] = val;
+		if (indexNull != -1) {
+			overwritePair(key, val, indexNull);
 			pairs++;
 			return;
 		}
 		
 		//Without resize we can't guarantee an empty bucket.
-        //keys[iHash] = key;
-        //vals[iHash] = val;
-		overwriteValue(key, val, iHash);
+		overwritePair(key, val, iHash);
     }
 
     /**
@@ -306,51 +325,15 @@ public class LinearProbingHash {
 	 *             if key is null
 	 */
 	/*@ public normal_behavior
-	  @   requires 	\invariant_for(this);
-	  @
-	  @   //The given key is not in the table. (This can already be true at the beginning)
-	  @   ensures	(\forall int x; 0 <= x && x < keys.length;
-	  @					!(key.equals(keys[x])));
-	  @
-	  @   //If pairs is now pairs-1, then the key was in the hash table at the start of the method.
+	  @   //If pairs is now pairs-1, then the key was in the hash table at the 
+	  @   //start of the method and isn't in the table anymore.
 	  @   ensures	(pairs == \old(pairs) - 1) ==> 
-	  @					(\exists int x; 0 <= x && x < keys.length;
+	  @					(\exists int x; 0 <= x && x < buckets;
 	  @						\old(key.equals(keys[x])) && keys[x] == null && vals[x] == null);
-	  @
 	  @
 	  @   //The method has no effect on hash table positions were the key wasn't placed.
 	  @   ensures	(\forall int x; 0 <= x && x < buckets && \old(!key.equals(keys[x]));
 	  @					keys[x] == \old(keys[x]) && vals[x] == \old(vals[x]));
-	  @
-	  @
-	  @
-	  @ //The following is just a Copy of the Invariants. 
-	  @ //The invariants them self are not checked.
-	  @ //It only work in this way. Not sure why.
-	  @ 
-	  @   // The hash table has at least one chain.
-	  @   ensures	buckets > 0;
-	  @
-	  @   //The arrays keys and vals are nonnull and are two different arrays.
-	  @   ensures	keys != null && vals != null && keys != vals;
-	  @
-	  @   //The arrays keys and vals are not suptypes.
-	  @   //It limits vals a bit, but helps verification.
-	  @   //Maybe not important for linear probing.
-	  @   ensures	\typeof(keys) == \type(HashObject[]) 
-	  @						&& \typeof(vals) == \type(Object[]);
-	  @
-	  @   // The arrays keys and vals are equally long.
-	  @   ensures	buckets == vals.length && buckets == keys.length;
-	  @
-	  @   //The hash table cant have a negative amount of elements.
-	  @   //instance invariant	pairs == (\num_of int x; 0 <= x && x < keys.length; keys[x] != null);
-	  @   //instance invariant	0 <= pairs && pairs < buckets;
-	  @
-	  @   //Each key is at most ones in the hash table.
-	  @   ensures	(\forall int y; 0 <= y && y < keys.length && keys[y] != null;
-	  @					(\forall int z; 0 < z && z < keys.length && keys[z] != null;
-	  @						keys[z].equals(keys[y]) ==> (z == y)));
 	  @
 	  @   assignable keys[*], vals[*], pairs;
 	  @
@@ -360,66 +343,16 @@ public class LinearProbingHash {
 	  @   signals_only IllegalArgumentException;
 	  @   signals (IllegalArgumentException e) true;
 	  @*/
-    public void /*@ helper*/ delete(HashObject key) {
+    public void delete(HashObject key) {
 		if (key == null)
 			throw new IllegalArgumentException("argument to delete() is null");
 
-		//int index = getIndex(hash(key), key);
+		int index = getIndex(hash(key), key);
 		
-		if (contains(key)) {
-			int index = getIndex(hash(key), key);
-			if (index == -1) throw new IllegalArgumentException("nope");
+		if (index != -1) {
 			keys[index] = null;
 			vals[index] = null;
 			pairs--;
 		}
     }
-	
-	/*@ public normal_behavior
-	  @   requires	key != null && val != null;
-	  @   requires	0 <= index && index < buckets;
-	  @   requires	(\forall int y; 0 <= y && y < keys.length;
-	  @					!key.equals(keys[y]));
-	  @   requires	!contains(key);
-	  @
-	  @   ensures	keys[index] == key && vals[index] == val;
-	  @
-	  @   assignable	keys[index], vals[index];
-	  @*/
-	private void overwriteValue(HashObject key, Object val, int index) {
-		keys[index] = key;
-		vals[index] = val;
-	}
-	
-	/*@ public normal_behavior
-	  @   requires 	\invariant_for(this);
-	  @
-	  @   //If the result is -1 the given key is not in the hash table.
-	  @   ensures	!\result ==>
-	  @					(\forall int x; 0 <= x && x < keys.length; 
-	  @						!(key.equals(keys[x])));
-	  @
-	  @   //If the result is not -1 the given key is in the hash table 
-	  @   //	and the result is the postion of the key.
-	  @   ensures	\result ==> 
-	  @					(\exists int x; 0 <= x && x < keys.length; 
-	  @						key.equals(keys[x]));
-	  @*/
-	private /*@ strictly_pure @*/ boolean /*@ helper*/ contains(HashObject key) {
-		/*@ //Every postion in the array up until now didnt include the key.
-		  @ //	This is always true, since the method terminates if the key is found.
-		  @ loop_invariant	0 <= j && j <= keys.length &&
-		  @					(\forall int x; 0 <= x && x < j; 
-		  @						!(key.equals(keys[x])));
-		  @ assignable	\strictly_nothing;
-		  @ decreases	keys.length - j;
-		  @*/
-		for (int j = 0; j < keys.length; j++) {
-			if (key.equals(keys[j])) {
-				return true;
-			}
-		}
-		
-		return false;
-	}
 }
