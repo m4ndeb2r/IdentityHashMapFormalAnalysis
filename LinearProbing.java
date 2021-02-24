@@ -204,10 +204,9 @@ public class LinearProbingHash {
 		return -1;
 	}
 	
-	//Simply overwrites key-value. This is a method, because it is difficult
+	//Simply overwrites a key-value pair. This is a method, because it is difficult
 	//to verifiy this part of the hash table, specifically the invariants.
 	/*@ public normal_behavior
-	  @   requires	key != null && val != null;
 	  @   requires	0 <= index && index < buckets;
 	  @   requires	(getIndex(index, key) == -1);
 	  @
@@ -325,11 +324,9 @@ public class LinearProbingHash {
 	 *             if key is null
 	 */
 	/*@ public normal_behavior
-	  @   //If pairs is now pairs-1, then the key was in the hash table at the 
-	  @   //start of the method and isn't in the table anymore.
-	  @   ensures	(pairs == \old(pairs) - 1) ==> 
-	  @					(\exists int x; 0 <= x && x < buckets;
-	  @						\old(key.equals(keys[x])) && keys[x] == null && vals[x] == null);
+	  @   //The given key is not in the table. (This can already be true at the beginning)
+	  @   ensures	(\forall int x; 0 <= x && x < buckets;
+	  @					!(key.equals(keys[x])));
 	  @
 	  @   //The method has no effect on hash table positions were the key wasn't placed.
 	  @   ensures	(\forall int x; 0 <= x && x < buckets && \old(!key.equals(keys[x]));

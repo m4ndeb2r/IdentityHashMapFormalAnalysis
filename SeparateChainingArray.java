@@ -17,7 +17,7 @@ public class SeparateChainingArray {
 	  @
 	  @ //The hash table cant have a negative amount of elements.
 	  @ // (?) pairs = #keys[x].length mit 0 <= x < chains
-	  @ instance invariant	pairs >= 0;
+	  @ //instance invariant	pairs >= 0;
 	  @
 	  @ //The arrays keys and vals are nonnull and are two different arrays.
 	  @ instance invariant	keys != null && vals != null && keys != vals;
@@ -27,7 +27,8 @@ public class SeparateChainingArray {
 	  @ instance invariant	\typeof(keys) == \type(HashObject[][]) 
 	  @						&& \typeof(vals) == \type(Object[][])
 	  @						&& (\forall int x; 0 <= x && x < chains;
-	  @							\typeof(vals[x]) == \type(Object[]));
+	  @							\typeof(vals[x]) == \type(Object[])
+	  @							&& \typeof(keys[x]) == \type(HashObject[]));
 	  @
 	  @ // The arrays keys and vals are equally long.
 	  @ instance invariant	chains == vals.length && chains == keys.length;
@@ -56,9 +57,9 @@ public class SeparateChainingArray {
 	  @								keys[x][y] != null && vals[x][y] != null));
 	  @
 	  @ //Each Key is in its correct bucket.
-	  @ instance invariant	(\forall int x; 0 <= x && x < chains;
-	  @							(\forall int y; 0 <= y && y < keys[x].length;
-	  @								x == hash(keys[x][y])));
+	  @ //instance invariant	(\forall int x; 0 <= x && x < chains;
+	  @		//					(\forall int y; 0 <= y && y < keys[x].length;
+	  @			//					x == hash(keys[x][y])));
 	  @
 	  @ //Each key is at most ones in the hash table.
 	  @ //Only needs to check the same bucket because of the previous invariant.
@@ -90,14 +91,10 @@ public class SeparateChainingArray {
 		vals = new Object[chains][0];
 	}
 
+	//Returns the index of the given key, if the key is in the hash table.
+	//Otherwise returns -1.
 	/*@ public normal_behavior
 	  @   requires 	0 <= valueH && valueH < chains;
-	  @
-	  @   requires	\invariant_for(this);
-	  @   //requires	(\forall int x; 0 <= x && x < chains;
-	  @		//			(\forall int y; 0 <= y && y < keys[x].length;
-	  @			//			(\forall int z; y < z && z < keys[x].length;
-	  @				//			(keys[x][z].getValue() != keys[x][y].getValue()))));
 	  @
 	  @   //If the result is -1 the given key is not in the hash table.
 	  @   ensures	(\result == -1) ==>
@@ -110,11 +107,12 @@ public class SeparateChainingArray {
 	  @					(0 <= \result && \result < keys[valueH].length 
 	  @					&& key.equals(keys[valueH][\result]));
 	  @*/
-	private /*@ strictly_pure @*/ int /*@ helper*/ getIndex(int valueH, HashObject key) {
+	private /*@ strictly_pure @*/ int getIndex(int valueH, HashObject key) {
 		/*@ //Every postion in the array up until now didnt include the key.
 		  @ //	This is always true, since the method terminates if the key is found.
 		  @ loop_invariant	0 <= j && j <= keys[valueH].length &&
-		  @					(\forall int x; 0 <= x && x < j; !(key.equals(keys[valueH][x])));
+		  @					(\forall int x; 0 <= x && x < j; 
+		  @						!(key.equals(keys[valueH][x])));
 		  @ assignable	\strictly_nothing;
 		  @ decreases	keys[valueH].length - j;
 		  @*/
@@ -126,31 +124,6 @@ public class SeparateChainingArray {
 		return -1;
 	}
 	
-	/*@ public normal_behavior
-	  @   requires 	0 <= valueH && valueH < chains;
-	  @   ensures	\result ==> 
-	  @					(\exists int x; 0 <= x && x < keys[valueH].length; 
-	  @						(key.equals(keys[valueH][x])));
-	  @   ensures	!\result ==> 
-	  @					(\forall int x; 0 <= x && x < keys[valueH].length; 
-	  @						!(key.equals(keys[valueH][x])));
-	  @*/
-	private /*@ strictly_pure @*/ boolean contains(int valueH, HashObject key) {
-		/*@ //Every postion in the array up until now didnt include the key.
-		  @ //	This is always true, since the method terminates if the key is found.
-		  @ loop_invariant	0 <= j && j <= keys[valueH].length &&
-		  @					(\forall int x; 0 <= x && x < j; !(key.equals(keys[valueH][x])));
-		  @ assignable	\strictly_nothing;
-		  @ decreases	keys[valueH].length - j;
-		  @*/
-		for (int j = 0; j < keys[valueH].length; j++) {
-			if (key.equals(keys[valueH][j])) {
-				return true;
-			}
-		}
-		return false;
-	}
-
 	/**
 	 * Returns the value associated with the specified key in this hash table.
 	 *
@@ -161,21 +134,21 @@ public class SeparateChainingArray {
 	 * @throws IllegalArgumentException
 	 *             if key is null
 	 */
-	/*@
-	  @ public normal_behavior
-	  @   requires	\invariant_for(this);
-	  @   requires	(\forall int x; 0 <= x && x < chains;
-	  @					(\forall int y; 0 <= y && y < keys[x].length;
-	  @						(\forall int z; y < z && z < keys[x].length;
-	  @							(keys[x][z].getValue() != keys[x][y].getValue()))));
-	  @
+	/*@ public normal_behavior
+	  @   //If the result is not null, the key is in keys
+	  @   //	and the result is at the same postion in vals.
 	  @   ensures	(\result != null) ==>
-      @   				(\exists int y; 0 <= y && y < keys[hash(key)].length;
-	  @						key.equals(keys[hash(key)][y]) && vals[hash(key)][y] == \result);
+      @   				(\exists int x; 0 <= x && x < keys[hash(key)].length;
+	  @						key.equals(keys[hash(key)][x]) 
+	  @						&& vals[hash(key)][x] == \result);
+	  @
+	  @   //If the result is null, the key is not in keys.
 	  @   ensures	(\result == null) ==> 
-      @					(\forall int y; 0 <= y && y < keys[hash(key)].length;
-	  @						!(key.equals(keys[hash(key)][y])));
+      @					(\forall int x; 0 <= x && x < keys[hash(key)].length;
+	  @						!(key.equals(keys[hash(key)][x])));
 	  @   
+	  @   //We can't make the whole method strictly_pure, 
+	  @   //because a exception creates an object.
 	  @   assignable	\strictly_nothing;
 	  @
 	  @ also
@@ -184,7 +157,7 @@ public class SeparateChainingArray {
 	  @   signals_only	IllegalArgumentException;
 	  @   signals	(IllegalArgumentException e) true;
 	  @*/
-	public /*@ pure @*/ /*@ nullable @*/ Object /*@ helper*/ get(HashObject key) {
+	public /*@ pure @*/ /*@ nullable @*/ Object get(HashObject key) {
 		if (key == null)
 			throw new IllegalArgumentException("argument to get() is null");
 
@@ -198,247 +171,94 @@ public class SeparateChainingArray {
 		return null;
 	}
 	
-	/*@
-	  @ public normal_behavior
-	  @   requires	\invariant_for(this);
-	  @
-	  @   requires	keysTemp != null && valsTemp != null && keysTemp != valsTemp;
-	  @   requires	keysTemp.length == valsTemp.length;
-	  @   requires	\typeof(keysTemp) == \type(HashObject[]) 
-	  @				&& \typeof(valsTemp) == \type(Object[]);
-	  @   requires	\typeof(keysTemp) == \typeof(keys[iHash])
-	  @				&& \typeof(valsTemp) == \typeof(vals[iHash]);
-	  @
-	  @   requires	(\forall int x; 0 <= x && x < chains;
-	  @					keysTemp != keys[x] && keysTemp != vals[x]
-	  @					&& valsTemp != keys[x] && valsTemp != vals[x]);
-	  @
-	  @   requires	0 <= iHash && iHash < chains;
-	  @   requires	0 <= srcPos && 0 <= destPos && 0 <= length;
-	  @   requires	length + srcPos <= keys[iHash].length 
-	  @				&& length + destPos <= keysTemp.length;
-	  @
-	  @   ensures	(\forall int x; 0 <= x && x < length; 
-	  @					keysTemp[destPos + x] == keys[iHash][srcPos + x]
-	  @					&& valsTemp[destPos + x] == vals[iHash][srcPos + x]);
-	  @
-	  @   assignable	valsTemp[destPos .. destPos+length-1], keysTemp[destPos .. destPos+length-1];
-	  @*/
-	private void /*@ helper*/ arrayCopy(HashObject[] keysTemp, Object[] valsTemp, int iHash, int srcPos, int destPos, int length) {
-		/*@ //The arrays are a copys of the other arrays up until this point.
-		  @ loop_invariant	0 <= k && k <= length &&
-		  @					(\forall int x; 0 <= x && x < k; 
-		  @						keysTemp[destPos + x] == keys[iHash][srcPos + x] 
-		  @						&& valsTemp[destPos + x] == vals[iHash][srcPos + x]);
-		  @ assignable	valsTemp[destPos .. destPos+length-1], keysTemp[destPos .. destPos+length-1];
-		  @ decreases	length - k;
-		  @*/
-		for (int k = 0; k < length; k++) {
-			keysTemp[destPos + k] = keys[iHash][srcPos + k];
-			valsTemp[destPos + k] = vals[iHash][srcPos + k];
-		}
-		return;
-	}
-	
 	/*@ public normal_behavior
 	  @   requires	0 <= iHash && iHash < chains;
-	  @   requires	(\forall int x; 0 <= x && x < keys[iHash].length; 
-	  @						(key.getValue() != keys[iHash][x].getValue()));
+	  @   requires	(getIndex(iHash, key) == -1);
 	  @
-	  @   requires	(\forall int y; 0 <= y && y < keys[iHash].length;
-	  @					(\forall int z; y < z && z < keys[iHash].length;
-	  @						(keys[iHash][z].getValue() != keys[iHash][y].getValue())));
-	  @
-	  @   ensures	pairs == \old(pairs) + 1
-	  @				&& keys[iHash].length == \old(keys[iHash].length) + 1
-	  @				&& vals[iHash].length == \old(vals[iHash].length) + 1
-	  @				&& keys[iHash][keys[iHash].length - 1] == key
+	  @   ensures	keys[iHash][keys[iHash].length - 1] == key
 	  @				&& vals[iHash][vals[iHash].length - 1] == val
 	  @				&& (\forall int x; 0 <= x && x < keys[iHash].length - 1; 
 	  @					keys[iHash][x] == \old(keys[iHash][x])
 	  @					&& vals[iHash][x] == \old(vals[iHash][x]));
 	  @
-	  @   ensures	(\forall int y; 0 <= y && y < keys[iHash].length;
-	  @					(\forall int z; y < z && z < keys[iHash].length;
-	  @						(keys[iHash][z].getValue() != keys[iHash][y].getValue())));
-	  @
 	  @   assignable	keys[iHash], vals[iHash], pairs;
 	  @*/
 	private void increaseArraySize(int iHash, HashObject key, Object val) {
-		HashObject[] keysTemp = increaseKeysSize(keys[iHash]);
-		Object[] valsTemp = increaseValsSize(vals[iHash]);
-		
-		keysTemp[keysTemp.length - 1] = key;
-		valsTemp[valsTemp.length - 1] = val;
-		
-		keys[iHash] = keysTemp;
-		vals[iHash] = valsTemp;
-		pairs++;
-	}
-	
-	/*@ public normal_behavior
-	  @   requires	0 <= iHash && iHash < chains;
-	  @   requires	(\forall int x; 0 <= x && x < keys[iHash].length; 
-	  @						(key.getValue() != keys[iHash][x].getValue()));
-	  @
-	  @   requires	(\forall int y; 0 <= y && y < keys[iHash].length;
-	  @					(\forall int z; y < z && z < keys[iHash].length;
-	  @						(keys[iHash][z].getValue() != keys[iHash][y].getValue())));
-	  @
-	  @   ensures	keys[iHash].length == \old(keys[iHash].length) + 1
-	  @				&& keys[iHash][keys[iHash].length - 1] == key
-	  @				&& (\forall int x; 0 <= x && x < keys[iHash].length - 1; 
-	  @					keys[iHash][x] == \old(keys[iHash][x]));
-	  @
-	  @   ensures	(\forall int y; 0 <= y && y < keys[iHash].length;
-	  @					(\forall int z; y < z && z < keys[iHash].length;
-	  @						(keys[iHash][z].getValue() != keys[iHash][y].getValue())));
-	  @
-	  @   assignable	keys[iHash];
-	  @*/
-	private void updateKeys(int iHash, HashObject key) {
-		HashObject[] keysTemp = increaseKeysSize(keys[iHash]);
-		
-		keysTemp[keysTemp.length - 1] = key;
-		
-		keys[iHash] = keysTemp;
-	}
-	
-	/*@ public normal_behavior
-	  @   requires	0 <= iHash && iHash < chains;
-	  @
-	  @   requires	(\forall int y; 0 <= y && y < keys[iHash].length;
-	  @					(\forall int z; y < z && z < keys[iHash].length;
-	  @						(keys[iHash][z].getValue() != keys[iHash][y].getValue())));
-	  @
-	  @   ensures	vals[iHash].length == \old(vals[iHash].length) + 1
-	  @				&& vals[iHash][vals[iHash].length - 1] == val
-	  @				&& (\forall int x; 0 <= x && x < vals[iHash].length - 1; 
-	  @					vals[iHash][x] == \old(vals[iHash][x]));
-	  @
-	  @   ensures	(\forall int y; 0 <= y && y < keys[iHash].length;
-	  @					(\forall int z; y < z && z < keys[iHash].length;
-	  @						(keys[iHash][z].getValue() != keys[iHash][y].getValue())));
-	  @
-	  @   assignable	vals[iHash];
-	  @*/
-	private void updateVals(int iHash, Object val) {
-		Object[] valsTemp = increaseValsSize(vals[iHash]);
-		
-		valsTemp[valsTemp.length - 1] = val;
-
-		vals[iHash] = valsTemp;
-	}
-	
-	/*@ public normal_behavior
-	  @
-	  @   //Should be true, because of the invariants.
-	  @   //keysToCopy is supposed to be a keys[hash(key)].
-	  @   requires	keysToCopy != null;
-	  @   requires	(\forall int x; 0 <= x && x < keysToCopy.length; 
-	  @					keysToCopy[x] != null);
-	  @   requires	(\forall int y; 0 <= y && y < keysToCopy.length;
-	  @					(\forall int z; y < z && z < keysToCopy.length;
-	  @						(keysToCopy[z].getValue() != keysToCopy[y].getValue())));
-	  @   
-	  @   //Needs to hold for the invariants.
-	  @   ensures	\result != null;
-	  @   ensures	(\forall int x; 0 <= x && x < \result.length - 1; 
-	  @					\result[x] != null);
-	  @   ensures	(\forall int y; 0 <= y && y < \result.length - 1;
-	  @					(\forall int z; y < z && z < \result.length - 1;
-	  @						(keysToCopy[z].getValue() != keysToCopy[y].getValue())));
-	  @
-	  @   //What the method does.
-	  @   ensures	\result.length == keysToCopy.length + 1;
-	  @   ensures	(\forall int x; 0 <= x && x < \result.length - 1; 
-	  @					\result[x] == keysToCopy[x]);
-	  @   ensures	\typeof(\result) == \type(HashObject[]);
-	  @
-	  @   assignable	\nothing;
-	  @*/
-	private HashObject[] /*@ helper*/ increaseKeysSize(HashObject[] keysToCopy) {
-		int len = keysToCopy.length;
+		int len = keys[iHash].length;
 		HashObject[] keysTemp = new HashObject[len + 1];
-		
-		/*@ //The arrays are a copys of the other arrays up until this point.
-		  @ loop_invariant	0 <= k && k <= len &&
-		  @					(\forall int x; 0 <= x && x < k; 
-		  @							keysTemp[x] == keysToCopy[x]);
-		  @ assignable	keysTemp[0 .. len-1];
-		  @ decreases	len - k;
-		  @*/
-		for (int k = 0; k < len; k++) {
-			keysTemp[k] = keysToCopy[k];
-		}
-		
-		//The contract doesn't work without this.
-		keysTemp[len] = new HashObject(0);
-		
-		return keysTemp;
-	}
-	
-	/*@ public normal_behavior
-	  @   
-	  @   //Should be true, because of the invariants.
-	  @   //valsToCopy is supposed to be a vals[hash(key)].
-	  @   requires	valsToCopy != null;
-	  @   requires	(\forall int x; 0 <= x && x < valsToCopy.length; 
-	  @					valsToCopy[x] != null);
-	  @
-	  @   //Needs to hold for the invariants.
-	  @   ensures	\result != null;
-	  @   ensures	(\forall int x; 0 <= x && x < \result.length - 1; 
-	  @					\result[x] != null);
-	  @
-	  @    //What the method does.
-	  @   ensures	\result.length == valsToCopy.length + 1;
-	  @   ensures	(\forall int x; 0 <= x && x < \result.length - 1; 
-	  @					\result[x] == valsToCopy[x]);
-	  @   ensures	\typeof(\result) == \type(Object[]);
-	  @
-	  @   assignable	\nothing;
-	  @*/
-	private Object[] /*@ helper*/ increaseValsSize(Object[] valsToCopy) {
-		int len = valsToCopy.length;
 		Object[] valsTemp = new Object[len + 1];
 		
 		/*@ //The arrays are a copys of the other arrays up until this point.
 		  @ loop_invariant	0 <= k && k <= len &&
 		  @					(\forall int x; 0 <= x && x < k; 
-		  @							valsTemp[x] == valsToCopy[x]);
-		  @ assignable	valsTemp[0 .. len-1];
+		  @							keysTemp[x] == keys[iHash][x]
+		  @							&& valsTemp[x] == vals[iHash][x]);
+		  @ assignable	keysTemp[0 .. len-1], valsTemp[0 .. len-1];
 		  @ decreases	len - k;
 		  @*/
 		for (int k = 0; k < len; k++) {
-			valsTemp[k] = valsToCopy[k];
+			keysTemp[k] = keys[iHash][k];
+			valsTemp[k] = vals[iHash][k];
 		}
 		
-		//The contract doesn't work without this.
-		valsTemp[len] = new Object();
+		keysTemp[keysTemp.length - 1] = key;
+		valsTemp[valsTemp.length - 1] = val;
 		
-		return valsTemp;
+		keys[iHash] = keysTemp;
+		vals[iHash] = valsTemp;
 	}
 	
 	/*@ public normal_behavior
-	  @   requires	val != null;
+	  @   requires	\invariant_for(this);
 	  @   requires	0 <= iHash && iHash < chains;
-	  @   requires	0 <= index && index < vals[iHash].length;
+	  @   requires	keys[iHash].length > 0;
+	  @   requires	0 <= removePos && removePos < keys[iHash].length;
 	  @
-	  @   requires	(\forall int y; 0 <= y && y < keys[iHash].length;
-	  @					(\forall int z; y < z && z < keys[iHash].length;
-	  @						(keys[iHash][z].getValue() != keys[iHash][y].getValue())));
+	  @   ensures	(\forall int x; 0 <= x && x < removePos; 
+	  @					keys[iHash][x] == \old(keys[iHash][x])
+	  @					&& vals[iHash][x] == \old(vals[iHash][x]));
 	  @
-	  @   ensures	vals[iHash][index] == val;
+	  @   ensures	(\forall int x; (removePos + 1) <= x && x < \old(keys[iHash].length); 
+	  @					keys[iHash][x - 1] == \old(keys[iHash][x])
+	  @					&& vals[iHash][x - 1] == \old(vals[iHash][x]));
 	  @
-	  @   ensures	(\forall int y; 0 <= y && y < keys[iHash].length;
-	  @					(\forall int z; y < z && z < keys[iHash].length;
-	  @						(keys[iHash][z].getValue() != keys[iHash][y].getValue())));
+	  @   assignable	keys[iHash], vals[iHash], pairs;
 	  @
-	  @   assignable	vals[iHash][index];
+	  @ helper
 	  @*/
-	private void overwriteValue(Object val, int iHash, int index) {
-		vals[iHash][index] = val;
+	private void decreaseArraySize(int iHash, int removePos) {
+		int len = keys[iHash].length;
+		HashObject[] keysTemp = new HashObject[len - 1];
+		Object[] valsTemp = new Object[len - 1];
+		
+		/*@ //The arrays are a copys of the other arrays up until this point.
+		  @ loop_invariant	0 <= j && j <= removePos &&
+		  @					(\forall int x; 0 <= x && x < j; 
+		  @							keysTemp[x] == keys[iHash][x]
+		  @							&& valsTemp[x] == vals[iHash][x]);
+		  @ assignable	keysTemp[0 .. removePos-1], valsTemp[0 .. removePos-1];
+		  @ decreases	removePos - j;
+		  @*/
+		for (int j = 0; j < removePos; j++) {
+			keysTemp[j] = keys[iHash][j];
+			valsTemp[j] = vals[iHash][j];
+		}
+		
+		/*@ //The arrays are a copys of the other arrays up until this point.
+		  @ loop_invariant	(removePos + 1) <= k && k <= len &&
+		  @					(\forall int x; (removePos + 1) <= x && x < k; 
+		  @							keysTemp[x - 1] == keys[iHash][x]
+		  @							&& valsTemp[x - 1] == vals[iHash][x]);
+		  @ assignable	keysTemp[removePos+1 .. len-1], valsTemp[removePos+1 .. len-1];
+		  @ decreases	len - k;
+		  @*/
+		for (int k = removePos + 1; k < len; k++) {
+			keysTemp[k - 1] = keys[iHash][k];
+			valsTemp[k - 1] = vals[iHash][k];
+		}
+		
+		keys[iHash] = keysTemp;
+		vals[iHash] = valsTemp;
 	}
 	
 	/**
@@ -453,32 +273,15 @@ public class SeparateChainingArray {
 	 *             if key or val is null
 	 */
 	/*@ public normal_behavior
-	  @   requires	(\forall int y; 0 <= y && y < keys[hash(key)].length;
-	  @					(\forall int z; y < z && z < keys[hash(key)].length;
-	  @						(keys[hash(key)][z].getValue() != keys[hash(key)][y].getValue())));
-	  @   
-	  @   //The amount of elements in the hash table (called pairs) is now either pairs or pairs+1.
-	  @   ensures	(pairs == \old(pairs)) || (pairs == \old(pairs) + 1);
-	  @   
-	  @   //If pairs is now pairs, then the key was and still is in the table and the given value is at this postion.
-	  @   //	The current contract might not hold if resize is used, 
-	  @   //	since the contract requires that the keys postion did not change.
-	  @   ensures	(pairs == \old(pairs)) ==>
-	  @					(keys[hash(key)].length == \old(keys[hash(key)].length)
-	  @					&& (\exists int x; 0 <= x && x < keys[hash(key)].length;
-	  @						key.equals(keys[hash(key)][x]) && \old(key.equals(keys[hash(key)][x]))
-	  @						&& vals[hash(key)][x] == val));
-	  @   
-	  @   //If pairs is now pairs+1, then the table size at the keys postion (hash(key)) did increase by 1 and
-	  @   //	the key-value-pair is now at the new postion. (Duplicate was already checked)
-	  @   ensures	(pairs == \old(pairs) + 1) ==>
-	  @					((keys[hash(key)].length == (\old(keys[hash(key)].length) + 1)) 
-	  @						&& keys[hash(key)][keys[hash(key)].length-1].equals(key)
-	  @						&& vals[hash(key)][vals[hash(key)].length-1] == val);
+	  @   //The key-value pair is now in the hash table and at the same position. 
+	  @   ensures	(\exists int x; 0 <= x && x < keys[hash(key)].length;
+	  @					key.equals(keys[hash(key)][x]) && vals[hash(key)][x] == val);   
 	  @
-	  @   ensures	(\forall int y; 0 <= y && y < keys[hash(key)].length;
-	  @					(\forall int z; y < z && z < keys[hash(key)].length;
-	  @						(keys[hash(key)][z].getValue() != keys[hash(key)][y].getValue())));
+	  @   //The method has no effect on hash table positions were the key isn't placed.
+	  @   ensures	(\forall int x; 0 <= x && x < keys[hash(key)].length 
+	  @					&& !key.equals(keys[hash(key)][x]);
+	  @						keys[hash(key)][x] == \old(keys[hash(key)][x]) 
+	  @						&& vals[hash(key)][x] == \old(vals[hash(key)][x]));
 	  @
 	  @   assignable	keys[hash(key)], vals[hash(key)], keys[hash(key)][*], vals[hash(key)][*], pairs;
 	  @
@@ -497,21 +300,10 @@ public class SeparateChainingArray {
 
 		if (index != -1) {
 			vals[iHash][index] = val;
-			//overwriteValue(val, iHash, index);
 			return;
 		}
 		
-		//increaseArraySize(iHash, key, val);
-		
-		//HashObject[] keysTemp = increaseKeysSize(keys[iHash]);
-		
-		keys[iHash] = increaseKeysSize(keys[iHash]);
-		vals[iHash] = increaseValsSize(vals[iHash]);
-		
-		keys[iHash][keys[iHash].length - 1] = key;
-		vals[iHash][vals[iHash].length - 1] = val;
-		
-		pairs++;
+		increaseArraySize(iHash, key, val);
 	}
 
 	/**
@@ -525,21 +317,16 @@ public class SeparateChainingArray {
 	 */
 	/*@
 	  @ public normal_behavior
-	  @   requires true;
-	  @
 	  @   //The given key is not in the table. (This can already be true at the beginning)
-	  @   ensures (\forall int x; 0 <= x && x < keys[hash(key)].length;
-	  @			   !(keys[hash(key)][x].equals(key)));
+	  @   ensures	(\forall int x; 0 <= x && x < keys[hash(key)].length;
+	  @					!(key.equals(keys[hash(key)][x])));
 	  @
-	  @   //The amount of elements in the hash table (called n) is now either n or n-1.
-	  @   ensures (pairs == \old(pairs)) || (pairs == \old(pairs) - 1);
+	  @   //The method has no effect on hash table positions were the key wasn't placed.
+	  @   ensures	(\forall int x; 0 <= x && x < keys[hash(key)].length 
+	  @					&& \old(!key.equals(keys[hash(key)][x]));
+	  @						keys[hash(key)][x] == \old(keys[hash(key)][x]) 
+	  @						&& vals[hash(key)][x] == \old(vals[hash(key)][x]));
 	  @
-	  @   //If pairs is now pairs-1, then the key was in the hash table at the start of the method and
-	  @   //	the table size at the keys postion did decrease be 1.
-	  @   ensures (pairs == \old(pairs) - 1) ==> 
-	  @			   ((\exists int x; 0 <= x && x < keys[hash(key)].length;
-	  @				   \old(keys[hash(key)][x].equals(key)))
-	  @			   && (keys[hash(key)].length == \old(keys[hash(key)].length) - 1));
 	  @   assignable keys[*], vals[*], pairs;
 	  @
 	  @ also
@@ -558,9 +345,6 @@ public class SeparateChainingArray {
 		if (index != -1) {
 			HashObject[] keysTemp = new HashObject[keys[iHash].length - 1];
 			Object[] valsTemp = new Object[vals[iHash].length - 1];
-			
-			arrayCopy(keysTemp, valsTemp, iHash, 0, 0, index);
-			arrayCopy(keysTemp, valsTemp, iHash, index + 1, index, keys[iHash].length - index - 1);
 
 			keys[iHash] = keysTemp;
 			vals[iHash] = valsTemp;
@@ -577,17 +361,18 @@ public class SeparateChainingArray {
 	  @   ensures_free	\result == hash(key);
 	  @   assignable	\strictly_nothing;
 	  @   accessible	key.value, this.chains;
+	  @
+	  @ helper
 	  @*/
-	private /*@ strictly_pure @*/ int /*@ helper*/ hash(HashObject key) {
-		//return (key.hashCode() * key.hashCode()) % chains;
+	private /*@ strictly_pure @*/ int hash(HashObject key) {
 		return abs(key.hashCode()) % chains;
-		//return ((key.hashCode() % chains) + chains) % chains;
 	}
 
 	//Returns the absolute value of the given number.
 	//Unless the number is Integer.MIN_VALUE, then it return 0,
 	//since in java there is no absolute value for this.
-	private int /*@ helper*/ abs(int number) {
+	/*@ helper*/
+	private int abs(int number) {
 		if (number == Integer.MIN_VALUE)
 			return 0;
 		if (number < 0)
