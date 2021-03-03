@@ -151,6 +151,48 @@ public class LinearProbingHash {
 		return -1;
 	}
 	
+	/*@ public normal_behavior
+	  @   requires 	0 <= iHash && iHash < buckets;
+	  @   requires	(\exists int x; 0 <= x && x < buckets;
+	  @					keys[x] == null);
+	  @   requires	(\forall int x; 0 <= x && x < buckets && keys[x] != null;
+	  @					(\forall int y; 0 <= y && y < (x + buckets - hash(keys[x])) % buckets;
+	  @							keys[(y + hash(keys[x])) % buckets] != null));
+	  @
+	  @   //If the result is -1 the given key is not in the hash table.
+	  @   ensures	(\result == -1) ==>
+	  @					(\forall int x; 0 <= x && x < buckets; 
+	  @						!(key.equals(keys[(x + iHash) % buckets])));
+	  @
+	  @   //If the result is not -1 the given key is in the hash table 
+	  @   //	and the result is the postion of the key.
+	  @   ensures	(\result != -1) ==> 
+	  @					(0 <= \result && \result < buckets
+	  @					&& key.equals(keys[\result]));
+	  @*/
+	private /*@ strictly_pure @*/ int getIndex2(int iHash, HashObject key) {
+		
+		int index;
+		
+		/*@ //Every postion in the array up until now didnt include the key.
+		  @ //	This is always true, since the method terminates if the key is found.
+		  @ loop_invariant	0 <= j && j < buckets &&
+		  @					(\forall int x; 0 <= x && x < j; 
+		  @						!(key.equals(keys[(x + iHash) % buckets]))
+		  @						&& keys[(x + iHash) % buckets] != null);
+		  @ assignable	\strictly_nothing;
+		  @ decreases	buckets - j;
+		  @*/
+		for (int j = 0; j < buckets; j++) {
+			index = (j + iHash) % buckets;
+			if (keys[index] == null) return -1;
+			if (key.equals(keys[index])) return index;
+		}
+		
+		return -1;
+	}
+
+	
 	//Returns the index of an null-entry, if one is in the hash table.
 	//	It starts its search from iHash which is the hash-value of a key.
 	//  This is to essential to the hashtable concept.
