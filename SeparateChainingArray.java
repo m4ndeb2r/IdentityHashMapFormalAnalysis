@@ -9,17 +9,18 @@ public class SeparateChainingArray {
 
 	private int pairs; 				// number of key-value pairs
 	private int chains; 			// hash table size
-	private HashObject[][] keys; 	// two dimensional array for keys
-	private Object[][] vals; 		// two dimensional array for values
+	private /*@ nullable @*/ HashObject[][] keys; 	// two dimensional array for keys
+	private /*@ nullable @*/ Object[][] vals; 		// two dimensional array for values
 
 	/*@ // The hash table has at least one chain.
 	  @ instance invariant	chains > 0;
 	  @
 	  @ //The hash table cant have a negative amount of elements.
-	  @ // (?) pairs = #keys[x].length mit 0 <= x < chains
+	  @ //Currently doesn't work with delete, but the pairs 
+	  @ //variable is important for resize.
 	  @ //instance invariant	pairs >= 0;
 	  @
-	  @ //The arrays keys and vals are nonnull and are two different arrays.
+	  @ //The arrays keys and vals are two different arrays.
 	  @ instance invariant	keys != null && vals != null && keys != vals;
 	  @
 	  @ //The arrays keys and vals are not suptypes.
@@ -53,14 +54,9 @@ public class SeparateChainingArray {
 	  @
 	  @ //If a key is not null, then the value is also not null.
 	  @ //	This is important for get(), since it returns null if the key is not in the table.
-	  @ //instance invariant	(\forall int x; 0 <= x && x < chains;
-	  @		//					(\forall int y; 0 <= y && y < keys[x].length;
-	  @			//					(keys[x][y] != null) ==> (vals[x][y] != null)));
-	  @
-	  @ //Every element in keys[] or vals[] is nonnull.
-	  @ //instance invariant	(\forall int x; 0 <= x && x < chains;
-	  @			//				(\forall int y; 0 <= y && y < keys[x].length;
-	  @			//					keys[x][y] != null && vals[x][y] != null));
+	  @ instance invariant	(\forall int x; 0 <= x && x < chains;
+	  @							(\forall int y; 0 <= y && y < keys[x].length;
+	  @								(keys[x][y] != null) ==> (vals[x][y] != null)));
 	  @
 	  @ //Each Key is in its correct bucket.
 	  @ //instance invariant	(\forall int x; 0 <= x && x < chains;
@@ -223,16 +219,13 @@ public class SeparateChainingArray {
 	
 	/*@ public normal_behavior
 	  @   requires	0 <= iHash && iHash < chains;
-	  @   requires	keys[iHash].length == 5;
+	  @   requires	keys[iHash].length > 0;
 	  @   requires	0 <= removePos && removePos < keys[iHash].length;
 	  @
-	  @   ensures	(\forall int x; 0 <= x && x < removePos; 
-	  @					keys[iHash][x] == \old(keys[iHash][x])
-	  @					&& vals[iHash][x] == \old(vals[iHash][x]));
+	  @   ensures	getIndex(iHash, \old(keys[iHash][removePos])) == -1;
 	  @
-	  @   ensures	(\forall int x; (removePos + 1) <= x && x < \old(keys[iHash].length); 
-	  @					keys[iHash][x - 1] == \old(keys[iHash][x])
-	  @					&& vals[iHash][x - 1] == \old(vals[iHash][x]));
+	  @   ensures	(\forall int x; 0 <= x && x < \old(keys[iHash].length) && x != removePos; 
+	  @					getIndex(iHash, \old(keys[iHash][x])) != -1);
 	  @
 	  @   ensures	keys[iHash].length == (\old(keys[iHash].length) - 1)
 	  @				&& vals[iHash].length == (\old(vals[iHash].length) - 1);
@@ -275,6 +268,118 @@ public class SeparateChainingArray {
 		
 		keys[iHash] = keysTemp;
 		vals[iHash] = valsTemp;
+	}
+	
+	/*@ public normal_behavior
+	  @   requires	0 <= iHash && iHash < chains;
+	  @   requires	keys[iHash].length > 0;
+	  @   requires	(\forall int y; 0 <= y && y < keys[iHash].length;
+	  @					(\forall int z; 0 <= z && z < keys[iHash].length;
+	  @						keys[iHash][z].equals(keys[iHash][y]) ==> (y == z)));
+	  @
+	  @   ensures	(\forall int x; 0 <= x && x < keys[iHash].length;
+	  @					!(keys[iHash][x].equals(\old(keys[iHash][keys[iHash].length - 1]))));
+	  @
+	  @   ensures	(\forall int x; 0 <= x && x < (\old(keys[iHash].length) - 1); 
+	  @					keys[iHash][x] == \old(keys[iHash][x])
+	  @					&& vals[iHash][x] == \old(vals[iHash][x]));
+	  @
+	  @   ensures	keys[iHash].length == (\old(keys[iHash].length) - 1)
+	  @				&& vals[iHash].length == (\old(vals[iHash].length) - 1);
+	  @
+	  @   ensures	\typeof(keys[iHash]) == \type(HashObject[])
+	  @				&& \typeof(vals[iHash]) == \type(Object[]);
+	  @
+	  @   assignable	keys[iHash], vals[iHash];
+	  @*/
+	private void removeLastElement(int iHash) {
+		int len = keys[iHash].length;
+		HashObject[] keysTemp = new HashObject[len - 1];
+		Object[] valsTemp = new Object[len - 1];
+		
+		/*@ //The arrays are a copys of the other arrays up until this point.
+		  @ loop_invariant	0 <= j && j <= len - 1 &&
+		  @					(\forall int x; 0 <= x && x < j; 
+		  @							keysTemp[x] == keys[iHash][x]
+		  @							&& valsTemp[x] == vals[iHash][x]);
+		  @ assignable	keysTemp[0 .. len-2], valsTemp[0 .. len-2];
+		  @ decreases	len - 1 - j;
+		  @*/
+		for (int j = 0; j < len - 1; j++) {
+			keysTemp[j] = keys[iHash][j];
+			valsTemp[j] = vals[iHash][j];
+		}
+		
+		keys[iHash] = keysTemp;
+		vals[iHash] = valsTemp;
+	}
+	
+	/*@ public normal_behavior
+	  @   requires	0 <= iHash && iHash < chains;
+	  @   requires	keys[iHash].length > 0;
+	  @   requires	0 <= swapPosition && swapPosition < keys[iHash].length;
+	  @
+	  @   ensures	keys[iHash][swapPosition] == \old(keys[iHash][keys[iHash].length - 1])
+	  @				&& vals[iHash][swapPosition] == \old(vals[iHash][vals[iHash].length - 1])
+	  @				&& keys[iHash][keys[iHash].length - 1] == \old(keys[iHash][swapPosition])
+	  @				&& vals[iHash][vals[iHash].length - 1] == \old(vals[iHash][swapPosition]);
+	  @
+	  @   assignable	keys[iHash][swapPosition], vals[iHash][swapPosition],
+	  @					keys[iHash][keys[iHash].length - 1], vals[iHash][vals[iHash].length - 1];
+	  @*/
+	private void swapToLast(int iHash, int swapPosition) {
+		HashObject keyTemp = keys[iHash][swapPosition];
+		Object valTemp = vals[iHash][swapPosition];
+		
+		keys[iHash][swapPosition] = keys[iHash][keys[iHash].length - 1];
+		vals[iHash][swapPosition] = vals[iHash][vals[iHash].length - 1];
+		
+		keys[iHash][keys[iHash].length - 1] = keyTemp;
+		vals[iHash][vals[iHash].length - 1] = valTemp;
+	}
+	
+	/*@ public normal_behavior
+	  @   requires	0 <= iHash && iHash < chains;
+	  @   requires	keys[iHash].length > 0;
+	  @   requires	0 <= removePos && removePos < keys[iHash].length;
+	  @
+	  @   //Not possible because we dont check for duplicates.
+	  @   //ensures	(\forall int x; 0 <= x && x < keys[iHash].length;
+	  @		//			!(keys[iHash][x].equals(\old(keys[iHash][removePos]))));
+	  @
+	  @   //ensures	(\forall int x; 0 <= x && x < keys[iHash].length && x != removePos;
+	  @		//				keys[iHash][x] == \old(keys[iHash][x]) 
+	  @			//			&& vals[iHash][x] == \old(vals[iHash][x]));
+	  @
+	  @   ensures	keys[iHash][removePos] == \old(keys[iHash][keys[iHash].length - 1])
+	  @				&& vals[iHash][removePos] == \old(vals[iHash][vals[iHash].length - 1]);
+	  @
+	  @   ensures	keys[iHash].length == (\old(keys[iHash].length) - 1)
+	  @				&& vals[iHash].length == (\old(vals[iHash].length) - 1);
+	  @
+	  @   ensures	\typeof(keys[iHash]) == \type(HashObject[])
+	  @				&& \typeof(vals[iHash]) == \type(Object[]);
+	  @
+	  @   assignable	keys[iHash], vals[iHash], keys[iHash][*], vals[iHash][*];
+	  @*/
+	private void decreaseArraySize2(int iHash, int removePos) {
+		swapToLast(iHash, removePos);
+		removeLastElement(iHash);
+	}
+	
+	/*@ public normal_behavior
+	  @   requires	0 <= iHash && iHash < chains;
+	  @   requires	keys[iHash].length > 0;
+	  @   requires	0 <= index && index < keys[iHash].length;
+	  @   //requires	iHash == hash(key);
+	  @
+	  @   ensures	keys[iHash][index] == key && vals[iHash][index] == val;
+	  @
+	  @   assignable	keys[iHash][index], vals[iHash][index];
+	  @*/
+	private void overwritePair(HashObject key, Object val, int iHash, int index) {
+		keys[iHash][index] = key;
+		vals[iHash][index] = val;
 	}
 	
 	/**
@@ -331,17 +436,29 @@ public class SeparateChainingArray {
 	 */
 	/*@
 	  @ public normal_behavior
+	  @   //requires	(\forall int y; 0 <= y && y < keys[hash(key)].length;
+	  @		//			(\forall int z; y < z && z < keys[hash(key)].length;
+	  @			//			keys[hash(key)][z].getValue() != keys[hash(key)][y].getValue()));
+	  @
 	  @   //The given key is not in the table. (This can already be true at the beginning)
-	  @   ensures	(\forall int x; 0 <= x && x < keys[hash(key)].length;
-	  @					!(key.equals(keys[hash(key)][x])));
+	  @   //ensures	(\forall int x; 0 <= x && x < keys[\result].length;
+	  @		//			!(key.getValue() == keys[\result][x].getValue()));
 	  @
 	  @   //The method has no effect on hash table positions were the key wasn't placed.
-	  @   ensures	(\forall int x; 0 <= x && x < keys[hash(key)].length 
-	  @					&& \old(!key.equals(keys[hash(key)][x]));
-	  @						keys[hash(key)][x] == \old(keys[hash(key)][x]) 
-	  @						&& vals[hash(key)][x] == \old(vals[hash(key)][x]));
+	  @   //ensures	(\forall int x; 0 <= x && x < keys[\result].length
+	  @		//			&& \old(!(key.getValue() == keys[\result][x].getValue()));
+	  @			//			keys[\result][x] == \old(keys[\result][x]) 
+	  @				//		&& vals[\result][x] == \old(vals[\result][x]));
 	  @
-	  @   assignable keys[*], vals[*], pairs;
+	  @   //The method has no effect on hash table positions were the key wasn't placed.
+	  @   //ensures	(\forall int x; 0 <= x && x < keys[hash(key)].length && x != \result;
+	  @		//				keys[hash(key)][x] == \old(keys[hash(key)][x]) 
+	  @			//			&& vals[hash(key)][x] == \old(vals[hash(key)][x]));
+	  @   //ensures	(\result != -1) ==>
+	  @		//			(keys[hash(key)][\result] == null 
+	  @			//		&& vals[hash(key)][\result] == null);
+	  @
+	  @   assignable keys[hash(key)][*], vals[hash(key)][*], pairs;
 	  @
 	  @ also
 	  @ exceptional_behavior
@@ -349,21 +466,18 @@ public class SeparateChainingArray {
 	  @   signals_only IllegalArgumentException;
 	  @   signals (IllegalArgumentException e) true;
 	  @*/
-	public void delete(HashObject key) {
-		if (key == null)
-			throw new IllegalArgumentException("argument to delete() is null");
+	public int delete(HashObject key) {
+		if (key == null) throw new IllegalArgumentException("argument to delete() is null");
 
 		int iHash = hash(key);
 		int index = getIndex(iHash, key);
 
 		if (index != -1) {
-			HashObject[] keysTemp = new HashObject[keys[iHash].length - 1];
-			Object[] valsTemp = new Object[vals[iHash].length - 1];
-
-			keys[iHash] = keysTemp;
-			vals[iHash] = valsTemp;
+			keys[iHash][index] = null;
+			vals[iHash][index] = null;
 			pairs--;
 		}
+		return iHash;
 	}
 
 	// hash function for keys - returns value between 0 and chains-1
