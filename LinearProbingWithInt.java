@@ -352,7 +352,7 @@ public class LinearProbingHashWithInt {
 	  @   ensures	(\forall int x; 0 <= x && x < buckets; keys[x] != key);
 	  @
 	  @   //The method has no effect on hash table positions were the key wasn't placed.
-	  @   ensures	(\forall int x; 0 <= x && x < buckets && x != \result;
+	  @   ensures	(\forall int x; 0 <= x && x < buckets;
 	  @					keys[x] == \old(keys[x]) && vals[x] == \old(vals[x]));
 	  @
 	  @   assignable keys[*], vals[*], pairs;
@@ -363,7 +363,7 @@ public class LinearProbingHashWithInt {
 	  @   signals_only IllegalArgumentException;
 	  @   signals (IllegalArgumentException e) true;
 	  @*/
-    public void delete(HashObject key) {
+    public void delete(int key) {
 		if (key == iNull)
 			throw new IllegalArgumentException("argument to delete() is iNull");
 
