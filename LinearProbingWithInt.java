@@ -6,7 +6,7 @@
 public class LinearProbingHashWithInt {
 
 	private static final int INIT_CAPACITY = 8;
-	private static final int iNull = Integer.MIN_VALUE;
+	private static final int iNull = 0; //Integer.MIN_VALUE;
 
 	private int pairs; 			// number of key-value pairs
 	private int buckets; 		// size of linear probing table
@@ -19,19 +19,13 @@ public class LinearProbingHashWithInt {
 	  @ //The arrays keys and vals are nonnull and are two different arrays.
 	  @ instance invariant	keys != null && vals != null && keys != vals;
 	  @
-	  @ //The arrays keys and vals are not suptypes.
-	  @ //It limits vals a bit, but helps verification.
-	  @ //Maybe not important for linear probing.
-	  @ instance invariant	\typeof(keys) == \type(int[]) 
-	  @						&& \typeof(vals) == \type(int[]);
-	  @
 	  @ // The arrays keys and vals are equally long.
 	  @ instance invariant	buckets == keys.length && buckets == vals.length;
 	  @
 	  @ //The hash table cant have a negative amount of elements.
 	  @ //Currently doesn't work with delete, but the pairs 
 	  @ //variable is important for resize.
-	  @ //instance invariant	pairs == (\num_of int x; 0 <= x && x < buckets; keys[x] != null);
+	  @ //instance invariant	pairs == (\num_of int x; 0 <= x && x < buckets; keys[x] != iNull);
 	  @
 	  @ //Each key is at most ones in the hash table.
 	  @ instance invariant	(\forall int y; 0 <= y && y < buckets && keys[y] != iNull;
@@ -97,12 +91,10 @@ public class LinearProbingHashWithInt {
 	//Returns the absolute value of the given number.
 	//Unless the number is Integer.MIN_VALUE, then it return 0,
 	//since in java there is no absolute value for this.
-	/*@ helper*/
+	/*@ helper */
 	private int abs(int number) {
-		if (number == Integer.MIN_VALUE)
-			return 0;
-		if (number < 0)
-			return -number;
+		if (number == Integer.MIN_VALUE) return 0;
+		if (number < 0) return -number;
 		return number;
 	}
 
@@ -235,12 +227,13 @@ public class LinearProbingHashWithInt {
 	  @   ensures	(\forall int x; 0 <= x && x < buckets && x != \result;
 	  @					keys[x] == \old(keys[x]) && vals[x] == \old(vals[x]));
 	  @
-	  @   assignable	keys[*], vals[*];
+	  @   assignable	keys[*], vals[*], pairs;
 	  @*/
 	private int overwritePair(int key, int val) {
 		int index = findEmpty(key);
 		keys[index] = key;
 		vals[index] = val;
+		pairs++;
 		return index;
 	}
 
@@ -332,7 +325,6 @@ public class LinearProbingHashWithInt {
 			return indexCopy;
 		}
 		
-		pairs++;
 		return overwritePair(key, val);
     }
 
@@ -352,8 +344,8 @@ public class LinearProbingHashWithInt {
 	  @   ensures	(\forall int x; 0 <= x && x < buckets; keys[x] != key);
 	  @
 	  @   //The method has no effect on hash table positions were the key wasn't placed.
-	  @   ensures	(\forall int x; 0 <= x && x < buckets;
-	  @					keys[x] == \old(keys[x]) && vals[x] == \old(vals[x]));
+	  @   //ensures	(\forall int x; 0 <= x && x < buckets;
+	  @		//			keys[x] == \old(keys[x]) && vals[x] == \old(vals[x]));
 	  @
 	  @   assignable keys[*], vals[*], pairs;
 	  @
@@ -370,19 +362,132 @@ public class LinearProbingHashWithInt {
 		int index = getIndex(key);
 		if (index == -1) return;
 		
-		keys[index] = iNull;
-		vals[index] = iNull;
-		pairs--;
+		int nextNull = findEmpty(key);
+		
+		if (index < nextNull) {
+			/*@ loop_invariant	index <= i && i <= nextNull &&
+			  @					(\forall int x; index <= x && x < i; 
+			  @						keys[x] == iNull
+			  @						&& vals[x] == iNull);
+			  @ assignable	keys[*], vals[*];
+			  @ decreases	nextNull - i;
+			  @*/
+			for (int i = index; i < nextNull; i++) {
+				keys[i] = iNull;
+				vals[i] = iNull;
+			}
+			return;
+		}
+		
+		if (index > nextNull) {
+			/*@ loop_invariant	index <= j && j <= buckets &&
+			  @					(\forall int x; index <= x && x < j; 
+			  @						keys[x] == iNull
+			  @						&& vals[x] == iNull);
+			  @ assignable	keys[*], vals[*];
+			  @ decreases	buckets - j;
+			  @*/
+			for (int j = index; j < buckets; j++) {
+				keys[j] = iNull;
+				vals[j] = iNull;
+			}
+			
+			/*@ loop_invariant	0 <= k && k <= nextNull &&
+			  @					(\forall int x; 0 <= x && x < k; 
+			  @						keys[x] == iNull
+			  @						&& vals[x] == iNull);
+			  @ assignable	keys[*], vals[*];
+			  @ decreases	buckets - k;
+			  @*/
+			for (int k = 0; k < nextNull; k++) {
+				keys[k] = iNull;
+				vals[k] = iNull;
+			}
+		}
+		
+		
+		//keys[index] = iNull;
+		//vals[index] = iNull;
+		//pairs--;
 		
 		//Problem: Now it is possible that the invariants don't hold.
+    }
+	
+	/*@ public normal_behavior
+	  @   requires	key != iNull;
+	  @   requires	index == getIndex(key) && index != -1;
+	  @   requires	nextNull == findEmpty(key);
+	  @   requires	index < nextNull;
+	  @
+	  @   //The given key is not in the table.
+	  @   ensures	(\forall int x; 0 <= x && x < buckets; keys[x] != key);
+	  @
+	  @   //The method has no effect on hash table positions were the key wasn't placed.
+	  @   //ensures	(\forall int x; 0 <= x && x < buckets 
+	  @		//			&& \old(keys[x]) != iNull && \old(keys[x]) != key;
+	  @			//			getIndex(keys[x]) != -1));
+	  @
+	  @   assignable keys[*], vals[*];
+	  @*/
+    public void removeKey(int key, int index, int nextNull) {
+		
+		/*@ loop_invariant	index <= j && j <= (nextNull - 1) &&
+		  @					(\forall int x; index <= x && x < j; 
+		  @						keys[x] == \old(keys[x + 1])
+		  @						&& vals[x] == \old(vals[x + 1]));
+		  @ assignable	keys[*], vals[*];
+		  @ decreases	nextNull - 1 - j;
+		  @*/
+		for (int j = index; j < nextNull - 1; j++) {
+			keys[j] = keys[j + 1];
+			vals[j] = vals[j + 1];
+		}
+		
+		keys[nextNull - 1] = iNull;
+		vals[nextNull - 1] = iNull;
+    }
+	
+	/*@ public normal_behavior
+	  @   requires	key != iNull;
+	  @   requires	index == getIndex(key) && index != -1;
+	  @   requires	nextNull == findEmpty(key);
+	  @   requires	index < nextNull;
+	  @
+	  @   //The given key is not in the table.
+	  @   //ensures	(\forall int x; 0 <= x && x < buckets; keys[x] != key);
+	  @
+	  @   //The method has no effect on hash table positions were the key wasn't placed.
+	  @   //ensures	(\forall int x; 0 <= x && x < buckets 
+	  @		//			&& \old(keys[x]) != iNull && \old(keys[x]) != key;
+	  @			//			getIndex(keys[x]) != -1));
+	  @
+	  @   assignable keys[*], vals[*];
+	  @*/
+    public void removeKeys2(int key, int index, int nextNull) {
+		
+		/*@ loop_invariant	index <= i && i <= nextNull &&
+		  @					(\forall int x; index <= x && x < i; 
+		  @						keys[x] == iNull
+		  @						&& vals[x] == iNull);
+		  @ assignable	keys[index .. nextNull - 1], vals[index .. nextNull - 1];
+		  @ decreases	nextNull - i;
+		  @*/
+		for (int i = index; i < nextNull; i++) {
+			keys[i] = iNull;
+			vals[i] = iNull;
+		}
     }
 
 	// resizes the hash table to the given capacity by re-hashing all of the keys
 	/*@ public normal_behavior
 	  @   requires	capacity >= buckets;
+	  @   requires	(\exists int x; 0 <= x && x < buckets;
+	  @					(\exists int y; 0 <= y && y < buckets && x != y; 
+	  @						keys[y] == iNull && keys[x] == iNull));
 	  @
-	  @   ensures	(\forall int x; 0 <= x && x < buckets && keys[x] != iNull; 
-	  @					get(keys[x]) == \old(get(keys[x])));
+	  @   ensures	(\forall int x; 0 <= x && x < \old(buckets) && \old(keys[x]) != iNull; 
+	  @					(\exists int y; 0 <= y && y < buckets;
+	  @						\old(keys[x]) == keys[y]));
 	  @
 	  @   assignable	keys, vals, buckets;
 	  @*/
@@ -391,7 +496,8 @@ public class LinearProbingHashWithInt {
 		
 		/*@ loop_invariant	0 <= i && i <= buckets &&
 		  @					(\forall int x; 0 <= x && x < i && keys[x] != iNull; 
-		  @						get(keys[x]) == temp.get(keys[x]));
+		  @						(\exists int y; 0 <= y && y < capacity;
+		  @							keys[x] == temp.keys[y]));
 		  @ assignable	temp.keys[*], temp.vals[*], temp.pairs;
 		  @ decreases	buckets - i;
 		  @*/

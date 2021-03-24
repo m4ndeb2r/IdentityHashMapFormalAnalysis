@@ -9,8 +9,8 @@ public class SeparateChainingArray {
 
 	private int pairs; 				// number of key-value pairs
 	private int chains; 			// hash table size
-	private /*@ nullable @*/ HashObject[][] keys; 	// two dimensional array for keys
-	private /*@ nullable @*/ Object[][] vals; 		// two dimensional array for values
+	private HashObject[][] keys; 	// two dimensional array for keys
+	private Object[][] vals; 		// two dimensional array for values
 
 	/*@ // The hash table has at least one chain.
 	  @ instance invariant	chains > 0;
@@ -54,9 +54,9 @@ public class SeparateChainingArray {
 	  @
 	  @ //If a key is not null, then the value is also not null.
 	  @ //	This is important for get(), since it returns null if the key is not in the table.
-	  @ instance invariant	(\forall int x; 0 <= x && x < chains;
-	  @							(\forall int y; 0 <= y && y < keys[x].length;
-	  @								(keys[x][y] != null) ==> (vals[x][y] != null)));
+	  @ //instance invariant	(\forall int x; 0 <= x && x < chains;
+	  @		//					(\forall int y; 0 <= y && y < keys[x].length;
+	  @			//					(keys[x][y] != null) ==> (vals[x][y] != null)));
 	  @
 	  @ //Each Key is in its correct bucket.
 	  @ //instance invariant	(\forall int x; 0 <= x && x < chains;
@@ -473,6 +473,8 @@ public class SeparateChainingArray {
 		int index = getIndex(iHash, key);
 
 		if (index != -1) {
+			
+			
 			keys[iHash][index] = null;
 			vals[iHash][index] = null;
 			pairs--;
