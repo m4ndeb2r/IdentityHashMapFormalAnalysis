@@ -3,7 +3,7 @@
  * resolution strategy. When associating a value with a key that is already in
  * the hash table, the convention is to replace the old value with the new value.
  */
-public class SeparateChainingArray {
+public class SeparateChainingArrayNoEquals {
 
 	private static final int INIT_CAPACITY = 8;
 
@@ -56,7 +56,7 @@ public class SeparateChainingArray {
 	  @ instance invariant	(\forall int x; 0 <= x && x < chains;
 	  @							(\forall int y; 0 <= y && y < keys[x].length && keys[x][y] != null;
 	  @								(\forall int z; y < z && z < keys[x].length && keys[x][z] != null;
-	  @									!keys[x][z].equals(keys[x][y]))));
+	  @									keys[x][z] != (keys[x][y]))));
 	  @
 	  @
 	  @
@@ -83,7 +83,7 @@ public class SeparateChainingArray {
 	/**
 	 * Initializes an empty symbol table.
 	 */
-	public SeparateChainingArray() {
+	public SeparateChainingArrayNoEquals() {
 		this(INIT_CAPACITY);
 	}
 
@@ -93,7 +93,7 @@ public class SeparateChainingArray {
 	 * @param chains
 	 *            the initial number of chains, needs to be at least 1.
 	 */
-	public SeparateChainingArray(int chains) {
+	public SeparateChainingArrayNoEquals(int chains) {
 		if (chains < 1) chains = 1;
 		pairs = 0;
 		this.chains = chains;
@@ -104,7 +104,7 @@ public class SeparateChainingArray {
 	// hash function for keys - returns value between 0 and chains-1
 	/*@ public normal_behavior
 	  @   requires	chains > 0;
-	  @   ensures	(\forall HashObject ho; key.equals(ho) 
+	  @   ensures	(\forall HashObject ho; key == ho 
 	  @					==> (\result == hash(ho)))
 	  @				&& 0 <= \result && \result < chains;
 	  @   ensures_free	\result == hash(key);
@@ -135,25 +135,25 @@ public class SeparateChainingArray {
 	  @   //If the result is -1 the given key is not in the hash table.
 	  @   ensures	(\result == -1) ==>
 	  @					(\forall int x; 0 <= x && x < keys[iHash].length; 
-	  @						!(key.equals(keys[iHash][x])));
+	  @						!(key == (keys[iHash][x])));
 	  @
 	  @   //If the result is not -1 the given key is in the hash table 
 	  @   //	and the result is the postion of the key.
 	  @   ensures	(\result != -1) ==> 
 	  @					(0 <= \result && \result < keys[iHash].length 
-	  @					&& key.equals(keys[iHash][\result]));
+	  @					&& key == (keys[iHash][\result]));
 	  @*/
 	private /*@ strictly_pure @*/ int getIndex(int iHash, HashObject key) {
 		/*@ //Every postion in the array up until now didnt include the key.
 		  @ //	This is always true, since the method terminates if the key is found.
 		  @ loop_invariant	0 <= j && j <= keys[iHash].length &&
 		  @					(\forall int x; 0 <= x && x < j; 
-		  @						!(key.equals(keys[iHash][x])));
+		  @						!(key == (keys[iHash][x])));
 		  @ assignable	\strictly_nothing;
 		  @ decreases	keys[iHash].length - j;
 		  @*/
 		for (int j = 0; j < keys[iHash].length; j++) {
-			if (key.equals(keys[iHash][j])) {
+			if (key == (keys[iHash][j])) {
 				return j;
 			}
 		}
@@ -290,13 +290,13 @@ public class SeparateChainingArray {
 	  @   //	and the result is at the same postion in vals.
 	  @   ensures	(\result != null) ==>
       @   				(\exists int x; 0 <= x && x < keys[hash(key)].length;
-	  @						key.equals(keys[hash(key)][x]) 
+	  @						key == (keys[hash(key)][x]) 
 	  @						&& vals[hash(key)][x] == \result);
 	  @
 	  @   //If the result is null, the key is not in keys.
 	  @   ensures	(\result == null) ==> 
       @					(\forall int x; 0 <= x && x < keys[hash(key)].length;
-	  @						!(key.equals(keys[hash(key)][x])));
+	  @						!(key == (keys[hash(key)][x])));
 	  @   
 	  @   //We can't make the whole method strictly pure, 
 	  @   //because a exception creates an object.
@@ -332,7 +332,7 @@ public class SeparateChainingArray {
 	 */
 	/*@ public normal_behavior
 	  @   //The key-value pair is now in the hash table and at the same position.
-	  @   ensures	key.equals(keys[hash(key)][\result]) && vals[hash(key)][\result] == val;
+	  @   ensures	key == (keys[hash(key)][\result]) && vals[hash(key)][\result] == val;
 	  @
 	  @   //The method has no effect on hash table positions were the key isn't placed.
 	  @   ensures	(\forall int x; 0 <= x && x < \old(keys[hash(key)].length) && x != \result;
@@ -377,7 +377,7 @@ public class SeparateChainingArray {
 	  @
 	  @   //The given key is not in the table. (This can already be true at the beginning)
 	  @   ensures	(\forall int x; 0 <= x && x < keys[hash(key)].length;
-	  @					!(key.equals(keys[hash(key)][x])));
+	  @					!(key == (keys[hash(key)][x])));
 	  @
 	  @   //The method has no effect on hash table positions were the key wasn't placed.
 	  @   ensures	(\forall int x; 0 <= x && x < keys[hash(key)].length && x != \result;
