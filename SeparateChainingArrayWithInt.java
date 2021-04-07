@@ -6,37 +6,32 @@
 public class SeparateChainingArrayWithInt {
 
 	private static final int INIT_CAPACITY = 8;
-	private static final int iNull = 0;			//Null for int.
+	private static final int iNull = 0;			//Null for int. This is not a valid key.
 
 	private int pairs; 							//number of key-value pairs
 	private int chains; 						//hash table size
 	private int[][] keys; 						//two dimensional array for keys
 	private int[][] vals; 						//two dimensional array for values
 
-	/*@ // The hash table has at least one chain.
+	/*@ //The hash table has at least one chain.
 	  @ instance invariant	chains > 0;
 	  @
-	  @ //The hash table cant have a negative amount of elements.
-	  @ //Currently doesn't work with delete, but the pairs 
-	  @ //variable is important for resize.
-	  @ //instance invariant	pairs >= 0;
-	  @
-	  @ //The arrays keys and vals are two different arrays.
+	  @ //The arrays keys and vals are nonnull and are two different arrays.
 	  @ instance invariant	keys != null && vals != null && keys != vals;
 	  @
 	  @ //The arrays keys and vals are not suptypes.
-	  @ //Even with ints important, because of overwriting arrays.
+	  @ //Even with ints important, because arrays get overwritten.
 	  @ instance invariant	\typeof(keys) == \type(int[][]) 
 	  @						&& \typeof(vals) == \type(int[][]);
 	  @
-	  @ // The arrays keys and vals are equally long.
+	  @ //The arrays keys and vals are equally long.
 	  @ instance invariant	chains == vals.length && chains == keys.length;
 	  @
 	  @ //Every element in keys or vals is nonnull.
 	  @ instance invariant	(\forall int x; 0 <= x && x < chains;
 	  @							keys[x] != null && vals[x] != null);
 	  @
-	  @ // Each array inside of keys has an equally long partner array in vals at the same postion
+	  @ //Each array inside of keys has an equally long partner array in vals at the same postion.
 	  @ instance invariant	(\forall int x; 0 <= x && x < chains;
 	  @							keys[x].length == vals[x].length);
 	  @
@@ -45,13 +40,18 @@ public class SeparateChainingArrayWithInt {
 	  @							(\forall int y; x < y && y < chains;
 	  @								keys[x] != keys[y] && vals[x] != vals[y]));
 	  @
-	  @ //No array in keys appears in vals.
+	  @ //No array in keys and vals have the same reference.
 	  @ instance invariant	(\forall int x; 0 <= x && x < chains;
 	  @							(\forall int y; 0 <= y && y < chains;
 	  @ 							keys[x] != vals[y]));
 	  @
-	  @ //Each key is at most ones in the hash table.
-	  @ //Only needs to check the same bucket because of the previous invariant.
+	  @ //pairs is the amount of key-value pairs in the hash table.
+	  @ //Is important for resize which is currently not implemented.
+	  @ //instance invariant	pairs == (\sum int x; 0 <= x && x < chains;
+	  @	//								(\num_of int y; 0 <= y && y < keys[x].length;
+	  @	//									keys[x][y] != iNull));
+	  @
+	  @ //Each key is at most ones in the same chain.
 	  @ instance invariant	(\forall int x; 0 <= x && x < chains;
 	  @							(\forall int y; 0 <= y && y < keys[x].length && keys[x][y] != iNull;
 	  @								(\forall int z; y < z && z < keys[x].length && keys[x][z] != iNull;
@@ -69,18 +69,10 @@ public class SeparateChainingArrayWithInt {
 	  @		//					(\forall int y; 0 <= y && y < keys[x].length;
 	  @			//					(keys[x][y] != iNull) ==> (vals[x][y] != iNull)));
 	  @
-	  @ //Each Key is in its correct bucket.
+	  @ //Each Key is in its correct chain.
 	  @ //instance invariant	(\forall int x; 0 <= x && x < chains;
 	  @		//					(\forall int y; 0 <= y && y < keys[x].length;
 	  @			//					x == hash(keys[x][y])));
-	  @
-	  @ //Each key is at most ones in the hash table.
-	  @ //Only needs to check the same bucket because of the previous invariant.
-	  @ //instance invariant	(\forall int x; 0 <= x && x < chains;
-	  @		//					(\forall int y; 0 <= y && y < keys[x].length;
-	  @			//					(\forall int z; 0 <= z && z < keys[x].length;
-	  @				//					keys[x][z] == keys[x][y] ==> (y == z))));
-	  @
 	  @*/
 
 	/**
@@ -96,12 +88,47 @@ public class SeparateChainingArrayWithInt {
 	 * @param chains
 	 *            the initial number of chains, needs to be at least 1.
 	 */
+	/*@ public normal_behavior
+	  @   requires	chains > 0;
+	  @
+	  @   ensures	\fresh(keys) && \fresh(vals)
+	  @				&& this.chains == chains && pairs == 0;
+	  @
+	  @   ensures	(\forall int x; 0 <= x && x < chains;
+	  @					\fresh(keys[x]) && \fresh(vals[x]));
+	  @
+	  @   assignable	pairs, chains, keys, vals;
+	  @*/
 	public SeparateChainingArrayWithInt(int chains) {
 		if (chains < 1) chains = 1;
 		pairs = 0;
 		this.chains = chains;
-		keys = new int[chains][0];
-		vals = new int[chains][0];
+		int[][] keysTemp = new int[chains][];
+		int[][] valsTemp = new int[chains][];
+		/*@ loop_invariant	0 <= j && j <= chains &&
+		  @					(\forall int x; 0 <= x && x < j; 
+		  @						\fresh(keysTemp[x]) && \fresh(valsTemp[x])
+		  @						&& keysTemp[x].length == valsTemp[x].length
+		  @						&& keysTemp[x] != null && valsTemp[x] != null
+		  @						&& (\forall int y; x < y && y < j;
+		  @							keysTemp[x] != keysTemp[y] && valsTemp[x] != valsTemp[y])
+		  @						&& (\forall int y; 0 <= y && y < j;
+		  @							keysTemp[x] != valsTemp[y])
+		  @						&& (\forall int y; 0 <= y && y < keysTemp[x].length 
+		  @							&& keysTemp[x][y] != iNull;
+		  @								(\forall int z; y < z && z < keysTemp[x].length 
+		  @								&& keysTemp[x][z] != iNull;
+		  @									keysTemp[x][z] != keysTemp[x][y])));
+		  @ assignable	keysTemp[*], valsTemp[*];
+		  @ decreases	chains - j;
+		  @*/
+		for (int j = 0; j < chains; j++) {
+			keysTemp[j] = new int[0];
+			valsTemp[j] = new int[0];
+		}
+		
+		keys = keysTemp;
+		vals = valsTemp;
 	}
 
 	// hash function for keys - returns value between 0 and chains-1
@@ -129,18 +156,19 @@ public class SeparateChainingArrayWithInt {
 		return number;
 	}
 
-	//Returns the index of the given key, if the key is in the hash table.
+	//The int iHash is the hash value of the given key. The method returns 
+	//the index of the given key, if the key is in the chain keys[iHash].
 	//Otherwise returns -1.
 	/*@ public normal_behavior
 	  @   requires	key != iNull;
 	  @   requires 	0 <= iHash && iHash < chains;
 	  @
-	  @   //If the result is -1 the given key is not in the hash table.
+	  @   //If the result is -1 the given key is not in the given chain.
 	  @   ensures	(\result == -1) ==>
 	  @					(\forall int x; 0 <= x && x < keys[iHash].length; 
 	  @						key != keys[iHash][x]);
 	  @
-	  @   //If the result is not -1 the given key is in the hash table 
+	  @   //If the result is not -1 the given key is in the chain keys[iHash]
 	  @   //	and the result is the postion of the key.
 	  @   ensures	(\result != -1) ==> 
 	  @					(0 <= \result && \result < keys[iHash].length 
@@ -161,18 +189,20 @@ public class SeparateChainingArrayWithInt {
 		return -1;
 	}
 	
-	//Increases the size of the chain iHash by one and 
+	//Increases the size of the chain keys[iHash] by one and 
 	//adds the given key-value pair to the chain.
 	/*@ public normal_behavior
 	  @   requires	key != iNull && vals != iNull;
 	  @   requires	0 <= iHash && iHash < chains;
+	  @
+	  @   //The key is not in the chain keys[iHash].
 	  @   requires	getIndex(iHash, key) == -1;
 	  @
 	  @   //The new arrays are still the correct typ.
 	  @   ensures	\typeof(keys[iHash]) == \type(int[])
 	  @				&& \typeof(vals[iHash]) == \type(int[]);
 	  @
-	  @   //The array size did increase by one.
+	  @   //The array sizes did increase by one.
 	  @   ensures	keys[iHash].length == (\old(keys[iHash].length) + 1)
 	  @				&& vals[iHash].length == (\old(vals[iHash].length) + 1);
 	  @
@@ -234,17 +264,19 @@ public class SeparateChainingArrayWithInt {
 	}
 	
 	/**
-	 * Returns the value associated with the specified key in this hash table.
+	 * Returns the value associated with the given key in this hash table.
 	 *
 	 * @param key
 	 *            the key
-	 * @return the value associated with key in the hash table; null if no such
-	 *         value
+	 * @return the value associated with key in the hash table; 
+	 *			null if no such value
 	 * @throws IllegalArgumentException
 	 *             if key is null
 	 */
 	/*@ public normal_behavior
 	  @    requires	key != iNull;
+	  @
+	  @    //If a key is not null, then the value is also not null.
 	  @    requires	(\forall int x; 0 <= x && x < chains;
 	  @					(\forall int y; 0 <= y && y < keys[x].length;
 	  @						(keys[x][y] != iNull) ==> (vals[x][y] != iNull)));
@@ -256,13 +288,13 @@ public class SeparateChainingArrayWithInt {
 	  @						key == keys[hash(key)][x]
 	  @						&& vals[hash(key)][x] == \result);
 	  @
-	  @   //If the result is null, the key is not in keys.
+	  @   //If the result is null, the key is not in the hash table.
 	  @   ensures	(\result == iNull) ==> 
       @					(\forall int x; 0 <= x && x < keys[hash(key)].length;
 	  @						!(key == keys[hash(key)][x]));
 	  @   
 	  @   //We can't make the whole method strictly pure, 
-	  @   //because a exception creates an object.
+	  @   //because an exception creates an object.
 	  @   assignable	\strictly_nothing;
 	  @
 	  @ also
@@ -272,7 +304,8 @@ public class SeparateChainingArrayWithInt {
 	  @   signals	(IllegalArgumentException e) true;
 	  @*/
     public /*@ pure @*/ int get(int key) {
-		if (key == iNull) throw new IllegalArgumentException("argument to get() is null");
+		if (key == iNull) 
+			throw new IllegalArgumentException("The argument to get() is null");
 
 		int iHash = hash(key);
 		int index = getIndex(iHash, key);
@@ -283,8 +316,8 @@ public class SeparateChainingArrayWithInt {
 	}
 	
 	/**
-	 * Inserts the specified key-value pair into the hash table, overwriting the old
-	 * value with the new value if the hash table already contains the specified key.
+	 * Inserts the given key-value pair into the hash table, overwriting the old
+	 * value with the new value if the hash table already contains the given key.
 	 *
 	 * @param key
 	 *            the key
@@ -313,8 +346,10 @@ public class SeparateChainingArrayWithInt {
 	  @   signals	(IllegalArgumentException e) true;
 	  @*/
 	public int put(int key, int val) {
-		if (key == iNull) throw new IllegalArgumentException("first argument to get() is null");
-		if (val == iNull) throw new IllegalArgumentException("second argument to put() is null");
+		if (key == iNull) 
+			throw new IllegalArgumentException("The first argument to get() is null");
+		if (val == iNull) 
+			throw new IllegalArgumentException("The second argument to put() is null");
 
 		int iHash = hash(key);
 		int index = getIndex(iHash, key);
@@ -329,16 +364,15 @@ public class SeparateChainingArrayWithInt {
 	}
 
 	/**
-	 * Removes the specified key and its associated value from this hash table (if
-	 * the key is in this hash table).
+	 * Removes the given key from this hash table and therefore its 
+	 * associated value inaccessible (if the key is in this hash table).
 	 *
 	 * @param key
 	 *            the key
 	 * @throws IllegalArgumentException
 	 *             if key is null
 	 */
-	/*@
-	  @ public normal_behavior
+	/*@ public normal_behavior
 	  @   requires	key != iNull;
 	  @
 	  @   //The given key is not in the table. (This can already be true at the beginning)
@@ -358,7 +392,8 @@ public class SeparateChainingArrayWithInt {
 	  @   signals (IllegalArgumentException e) true;
 	  @*/
 	public int delete(int key) {
-		if (key == iNull) throw new IllegalArgumentException("argument to delete() is null");
+		if (key == iNull) 
+			throw new IllegalArgumentException("The argument to delete() is null");
 
 		int iHash = hash(key);
 		int index = getIndex(iHash, key);

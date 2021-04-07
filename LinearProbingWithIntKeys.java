@@ -3,9 +3,11 @@
  * resolution strategy. When associating a value with a key that is already in
  * the hash table, the convention is to replace the old value with the new value.
  */
-public class LinearProbingHashWithIntKeys {
+public class LinearProbingWithIntKeys {
 
 	private static final int INIT_CAPACITY = 8;
+	
+	//The following two ints are not valid keys.
 	private static final int iNull = 0;						//Null for int.
 	private static final int keyDummy = Integer.MIN_VALUE; 
 		 //If a key is deleted it is replaced with this.
@@ -24,9 +26,8 @@ public class LinearProbingHashWithIntKeys {
 	  @ // The arrays keys and vals are equally long.
 	  @ instance invariant	buckets == keys.length && buckets == vals.length;
 	  @
-	  @ //The hash table cant have a negative amount of elements.
-	  @ //Currently doesn't work with delete, but the pairs 
-	  @ //variable is important for resize.
+	  @ //pairs is the amount of key-value pairs in the hash table.
+	  @ //Is important for resize which is currently not implemented.
 	  @ //instance invariant	pairs == (\num_of int x; 0 <= x && x < buckets; keys[x] != iNull);
 	  @
 	  @ //The array vals is not a suptype.
@@ -67,7 +68,7 @@ public class LinearProbingHashWithIntKeys {
     /**
      * Initializes an empty symbol table.
      */
-    public LinearProbingHashWithIntKeys() {
+    public LinearProbingWithIntKeys() {
         this(INIT_CAPACITY);
     }
 
@@ -77,7 +78,15 @@ public class LinearProbingHashWithIntKeys {
 	 * @param buckets
 	 *            the initial number of buckets, is set to be at least 1.
 	 */
-    public LinearProbingHashWithIntKeys(int buckets) {
+	/*@ public normal_behavior
+	  @   requires	buckets > 0;
+	  @
+	  @   ensures	\fresh(keys) && \fresh(vals)
+	  @				&& this.buckets == buckets && pairs == 0;
+	  @
+	  @   assignable	pairs, buckets, keys, vals;
+	  @*/
+    public LinearProbingWithIntKeys(int buckets) {
 		if (buckets < 1) buckets = 1;
 		pairs = 0;
 		this.buckets = buckets;
@@ -111,7 +120,7 @@ public class LinearProbingHashWithIntKeys {
 	}
 
 	//Returns the index of the given key, if the key is in the hash table.
-	//	It starts its search from iHash which is the hash-value of the key.
+	//	It starts its search from the hash value of the key.
 	//  This is to essential to the hashtable concept.
 	//	I originally used one loop with the modulo operator, but the 
 	//	current two loop version is easier to verifiy.
@@ -167,12 +176,12 @@ public class LinearProbingHashWithIntKeys {
 		return -1;
 	}
 	
-	//Returns the index of an null-entry, if one is in the hash table.
-	//	It starts its search from iHash which is the hash-value of a key.
+	//Returns the index of an null-entry and there is always at least one.
+	//	It starts its search from the hash-value of a key.
 	//  This is to essential to the hashtable concept.
 	//	I originally used one loop with the modulo operator, but the 
 	//	current two loop version is easier to verifiy.
-	//Otherwise returns -1.
+	//Never returns -1.
 	/*@ public normal_behavior
 	  @   requires	key != iNull && key != keyDummy;
 	  @
@@ -181,7 +190,7 @@ public class LinearProbingHashWithIntKeys {
 	  @   ensures	0 <= \result && \result < buckets
 	  @				&& keys[\result] == iNull;
 	  @
-	  @   //The following two ensures guarantee that the resulting bucket
+	  @   //The following two ensures guarantee that the resulting index
 	  @   // is the "nearest" null to the hash value of key.
 	  @   ensures	(\result >= hash(key)) ==> 
 	  @					(\forall int y; hash(key) <= y && y < \result;
@@ -206,7 +215,6 @@ public class LinearProbingHashWithIntKeys {
 		  @*/
 		for (int j = iHash; j < buckets; j++) {
 			if (keys[j] == iNull) return j;
-			//if (keys[j] == keyDummy) return j;
 		}
 		
 		/*@ //Every postion in the array up until now is not null.
@@ -219,24 +227,27 @@ public class LinearProbingHashWithIntKeys {
 		  @*/
 		for (int k = 0; k < iHash; k++) {
 			if (keys[k] == iNull) return k;
-			//if (keys[k] == keyDummy) return k;
 		}
 		
 		//Should never be reached.
 		return -1;
 	}
 	
-	//Simply overwrites a key-value pair. This is a method, because it is difficult
+	//Overwrites a key-value pair. This is a method, because it is difficult
 	//to verifiy this part of the hash table, specifically the invariants.
 	/*@ public normal_behavior
 	  @   requires	key != iNull && key != keyDummy;
-	  @   requires	(getIndex(key) == -1);
+	  @
+	  @   //The key is not in the hash table.
+	  @   requires	getIndex(key) == -1;
+	  @   
+	  @   //There are at least two nulls in the hash table.
+	  @   //So the invarants hold after a null is replaced with a key.
 	  @   requires	(\exists int x; 0 <= x && x < buckets;
-	  @					(\exists int y; 0 <= y && y < buckets && x != y; 
+	  @					(\exists int y; x < y && y < buckets;
 	  @						keys[y] == iNull && keys[x] == iNull));
 	  @
-	  @   //The key-value pair is now in the hash table and at the same position. 
-	  @   //ensures	key == keys[\result] && vals[\result] == val;
+	  @   //The key-value pair is now in the hash table and at the same position.
 	  @   ensures	(\exists int x; 0 <= x && x < buckets;
 	  @					key == keys[x] && vals[x] == val);
 	  @
@@ -255,7 +266,7 @@ public class LinearProbingHashWithIntKeys {
 	}
 
 	/**
-	 * Returns the value associated with the specified key in this hash table.
+	 * Returns the value associated with the given key in this hash table.
 	 *
 	 * @param key
 	 *            the key
@@ -279,17 +290,18 @@ public class LinearProbingHashWithIntKeys {
 	  @						!(key == keys[x]));
 	  @   
 	  @   //We can't make the whole method strictly pure, 
-	  @   //because a exception creates an object.
+	  @   //because an exception creates an object.
 	  @   assignable	\strictly_nothing;
 	  @
 	  @ also
 	  @ exceptional_behavior
-	  @   requires	key == iNull;
+	  @   requires	key == iNull || key == keyDummy;
 	  @   signals_only	IllegalArgumentException;
 	  @   signals	(IllegalArgumentException e) true;
 	  @*/
     public /*@ pure @*/ /*@ nullable @*/ Object get(int key) {
-		if (key == iNull) throw new IllegalArgumentException("argument to get() is null");
+		if (key == iNull || key == keyDummy) 
+			throw new IllegalArgumentException("The argument to get() is invalid");
 
 		int index = getIndex(key);
 
@@ -300,8 +312,8 @@ public class LinearProbingHashWithIntKeys {
 	
 	
     /**
-	 * Inserts the specified key-value pair into the hash table, overwriting the old
-	 * value with the new value if the hash table already contains the specified key.
+	 * Inserts the given key-value pair into the hash table, overwriting the old
+	 * value with the new value if the hash table already contains the given key.
 	 *
 	 * @param key
 	 *            the key
@@ -312,12 +324,14 @@ public class LinearProbingHashWithIntKeys {
 	 */
 	/*@ public normal_behavior
 	  @   requires	key != iNull && key != keyDummy;
+	  @   
+	  @   //There are at least two nulls in the hash table.
+	  @   //So the invarants hold after a null is replaced with a key.
 	  @   requires	(\exists int x; 0 <= x && x < buckets;
-	  @					(\exists int y; 0 <= y && y < buckets && x != y; 
+	  @					(\exists int y; x < y && y < buckets;
 	  @						keys[y] == iNull && keys[x] == iNull));
 	  @
-	  @   //The key-value pair is now in the hash table and at the same position. 
-	  @   //ensures	key == keys[\result] && vals[\result] == val;
+	  @   //The key-value pair is now in the hash table and at the same position.
 	  @   ensures	(\exists int x; 0 <= x && x < buckets;
 	  @					key == keys[x] && vals[x] == val);
 	  @
@@ -329,13 +343,15 @@ public class LinearProbingHashWithIntKeys {
 	  @
 	  @ also
 	  @ exceptional_behavior
-	  @   requires	key == iNull || val == iNull;
+	  @   requires	key == iNull || key == keyDummy || val == null;
 	  @   signals_only	IllegalArgumentException;
 	  @   signals	(IllegalArgumentException e) true;
 	  @*/
     public int put(int key, Object val) {
-		if (key == iNull) throw new IllegalArgumentException("first argument to put() is iNull");
-		if (val == iNull) throw new IllegalArgumentException("second argument to put() is iNull");
+		if (key == iNull || key == keyDummy) 
+			throw new IllegalArgumentException("The first argument to put() is invalid");
+		if (val == null) 
+			throw new IllegalArgumentException("The second argument to put() is invalid");
 
 		int index = getIndex(key);
 		
@@ -348,8 +364,8 @@ public class LinearProbingHashWithIntKeys {
     }
 
     /**
-	 * Removes the specified key and its associated value from this hash table (if
-	 * the key is in this hash table).
+	 * Removes the given key from this hash table and therefore its 
+	 * associated value inaccessible (if the key is in this hash table).
 	 *
 	 * @param key
 	 *            the key
@@ -370,12 +386,13 @@ public class LinearProbingHashWithIntKeys {
 	  @
 	  @ also
 	  @ exceptional_behavior
-	  @   requires key == iNull;
+	  @   requires key == iNull || key == keyDummy;
 	  @   signals_only IllegalArgumentException;
 	  @   signals (IllegalArgumentException e) true;
 	  @*/
     public int delete(int key) {
-		if (key == iNull) throw new IllegalArgumentException("argument to delete() is iNull");
+		if (key == iNull || key == keyDummy) 
+			throw new IllegalArgumentException("The argument to delete() is invalid");
 
 		int index = getIndex(key);
 		if (index == -1) return index;

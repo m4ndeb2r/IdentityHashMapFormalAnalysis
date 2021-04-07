@@ -3,11 +3,11 @@
  * resolution strategy. When associating a value with a key that is already in
  * the hash table, the convention is to replace the old value with the new value.
  */
-public class LinearProbingHashNoEquals {
+public class LinearProbingNoEquals {
 
 	private static final int INIT_CAPACITY = 8;
 	private static final HashObject keyDummy = new HashObject(Integer.MIN_VALUE);
-		//If a key is deleted it is replaced with this.
+		//If a key is deleted it is replaced with this. This is not a valid key.
 
 	private int pairs; 									//number of key-value pairs
 	private int buckets; 								//size of linear probing table
@@ -23,12 +23,11 @@ public class LinearProbingHashNoEquals {
 	  @ // The arrays keys and vals are equally long.
 	  @ instance invariant	buckets == keys.length && buckets == vals.length;
 	  @
-	  @ //The hash table cant have a negative amount of elements.
-	  @ //Currently doesn't work with delete, but the pairs 
-	  @ //variable is important for resize.
+	  @ //pairs is the amount of key-value pairs in the hash table.
+	  @ //Is important for resize which is currently not implemented.
 	  @ //instance invariant	pairs == (\num_of int x; 0 <= x && x < buckets; keys[x] != null);
 	  @
-	  @ //The array vals is not a suptype.
+	  @ //The arrays keys and vals are not suptypes.
 	  @ instance invariant	\typeof(keys) == \type(HashObject[])
 	  @						&& \typeof(vals) == \type(Object[]);
 	  @
@@ -48,11 +47,11 @@ public class LinearProbingHashNoEquals {
 	  @ //is no null value. This is important for LinearProbing so it can stop searching
 	  @ //for a Keys if it finds a null.
 	  @ instance invariant	(\forall int x; 0 <= x && x < buckets && x >= hash(keys[x])
-	  @						&& keys[x] != null && keyDummy != (keys[x]);
+	  @						&& keys[x] != null && keyDummy != keys[x];
 	  @							(\forall int y; hash(keys[x]) <= y && y <= x;
 	  @								keys[y] != null));
 	  @ instance invariant	(\forall int x; 0 <= x && x < buckets && x < hash(keys[x])
-	  @						&& keys[x] != null && keyDummy != (keys[x]);
+	  @						&& keys[x] != null && keyDummy != keys[x];
 	  @							(\forall int y; hash(keys[x]) <= y && y < buckets;
 	  @								keys[y] != null)
 	  @							&& (\forall int y; 0 <= y && y < x;
@@ -67,7 +66,7 @@ public class LinearProbingHashNoEquals {
     /**
      * Initializes an empty symbol table.
      */
-    public LinearProbingHashNoEquals() {
+    public LinearProbingNoEquals() {
         this(INIT_CAPACITY);
     }
 
@@ -77,7 +76,15 @@ public class LinearProbingHashNoEquals {
 	 * @param buckets
 	 *            the initial number of buckets, is set to be at least 1.
 	 */
-    public LinearProbingHashNoEquals(int buckets) {
+	/*@ public normal_behavior
+	  @   requires	buckets > 0;
+	  @
+	  @   ensures	\fresh(keys) && \fresh(vals)
+	  @				&& this.buckets == buckets && pairs == 0;
+	  @
+	  @   assignable	pairs, buckets, keys, vals;
+	  @*/
+    public LinearProbingNoEquals(int buckets) {
 		if (buckets < 1) buckets = 1;
 		pairs = 0;
 		this.buckets = buckets;
@@ -87,7 +94,7 @@ public class LinearProbingHashNoEquals {
 
     // hash function for keys - returns value between 0 and buckets-1
 	/*@ public normal_behavior
-	  @   requires	buckets > 0 && keyDummy != (key);
+	  @   requires	buckets > 0 && keyDummy != key;
 	  @   ensures	(\forall HashObject ho; key == ho 
 	  @					==> (\result == hash(ho)))
 	  @				&& 0 <= \result && \result < buckets;
@@ -112,14 +119,14 @@ public class LinearProbingHashNoEquals {
 	}
 	
 	//Returns the index of the given key, if the key is in the hash table.
-	//	It starts its search from iHash which is the hash-value of the key.
+	//	It starts its search from the hash-value of the key.
 	//  This is to essential to the hashtable concept.
 	//	I originally used one loop with the modulo operator, but the 
 	//	current two loop version is easier to verifiy.
 	//Returns -1 if a null is found. If this is the case, then the key is
 	//not in the hash table.
 	/*@ public normal_behavior
-	  @   requires	keyDummy != (key);
+	  @   requires	keyDummy != key;
 	  @
 	  @   //If the result is -1 the given key is not in the hash table.
 	  @   ensures	(\result == -1) ==>
@@ -141,7 +148,7 @@ public class LinearProbingHashNoEquals {
 		  @ //  or a bucket with the key is found.
 		  @ loop_invariant	iHash <= j && j <= buckets &&
 		  @					(\forall int x; iHash <= x && x < j; 
-		  @						!(key == keys[x]) && keys[x] != null);
+		  @						key != keys[x] && keys[x] != null);
 		  @ assignable	\strictly_nothing;
 		  @ decreases	buckets - j;
 		  @*/
@@ -155,7 +162,7 @@ public class LinearProbingHashNoEquals {
 		  @ //  or a bucket with the key is found.
 		  @ loop_invariant	0 <= k && k <= iHash &&
 		  @					(\forall int x; 0 <= x && x < k; 
-		  @						!(key == (keys[x])) && keys[x] != null);
+		  @						key != (keys[x]) && keys[x] != null);
 		  @ assignable	\strictly_nothing;
 		  @ decreases	iHash - k;
 		  @*/
@@ -168,21 +175,21 @@ public class LinearProbingHashNoEquals {
 		return -1;
 	}
 	
-	//Returns the index of an null-entry, if one is in the hash table.
-	//	It starts its search from iHash which is the hash-value of a key.
+	//Returns the index of an null-entry and there is always at least one.
+	//	It starts its search from the hash-value of a key.
 	//  This is to essential to the hashtable concept.
 	//	I originally used one loop with the modulo operator, but the 
 	//	current two loop version is easier to verifiy.
-	//Otherwise returns -1.
+	//Never returns -1.
 	/*@ public normal_behavior
-	  @   requires	keyDummy != (key);
+	  @   requires	keyDummy != key;
 	  @
 	  @   //The result is always an index of the array and at this index
 	  @   //is a null.
-	  @   ensures	(0 <= \result && \result < buckets
-	  @				&& keys[\result] == null);
+	  @   ensures	0 <= \result && \result < buckets
+	  @				&& keys[\result] == null;
 	  @
-	  @   //The following two ensures guarantee that the resulting bucket
+	  @   //The following two ensures guarantee that the resulting index
 	  @   // is the "nearest" null to the hash value of key.
 	  @   ensures	(\result >= hash(key)) ==> 
 	  @					(\forall int y; hash(key) <= y && y < \result;
@@ -225,19 +232,23 @@ public class LinearProbingHashNoEquals {
 		return -1;
 	}
 	
-	//Simply overwrites a key-value pair. This is a method, because it is difficult
+	//Overwrites a key-value pair. This is a method, because it is difficult
 	//to verifiy this part of the hash table, specifically the invariants.
 	/*@ public normal_behavior
-	  @   requires	keyDummy != (key);
-	  @   requires	(getIndex(key) == -1);
+	  @   requires	keyDummy != key;
+	  @
+	  @   //The key is not in the hash table.
+	  @   requires	getIndex(key) == -1;
+	  @   
+	  @   //There are at least two nulls in the hash table.
+	  @   //So the invarants hold after a null is replaced with a key.
 	  @   requires	(\exists int x; 0 <= x && x < buckets;
-	  @					(\exists int y; 0 <= y && y < buckets && x != y; 
+	  @					(\exists int y; x < y && y < buckets; 
 	  @						keys[y] == null && keys[x] == null));
 	  @
-	  @   //The key-value pair is now in the hash table and at the same position. 
-	  @   //ensures	key == (keys[\result]) && vals[\result] == val;
+	  @   //The key-value pair is now in the hash table and at the same position.
 	  @   ensures	(\exists int x; 0 <= x && x < buckets;
-	  @					key == (keys[x]) && vals[x] == val);
+	  @					key == keys[x] && vals[x] == val);
 	  @
 	  @   //The method has no effect on hash table positions were the key isn't placed.
 	  @   ensures	(\forall int x; 0 <= x && x < buckets && x != \result;
@@ -254,7 +265,7 @@ public class LinearProbingHashNoEquals {
 	}
 
 	/**
-	 * Returns the value associated with the specified key in this hash table.
+	 * Returns the value associated with the given key in this hash table.
 	 *
 	 * @param key
 	 *            the key
@@ -264,31 +275,32 @@ public class LinearProbingHashNoEquals {
 	 *             if key is null
 	 */
 	/*@ public normal_behavior
-	  @   requires	keyDummy != (key);
+	  @   requires	keyDummy != key;
 	  @
 	  @   //If the result is not null, the key is in keys
 	  @   //	and the result is at the same postion in vals.
 	  @   ensures	(\result != null) ==>
       @   				(\exists int y; 0 <= y && y < buckets;
-	  @						key == (keys[y]) && vals[y] == \result);
+	  @						key == keys[y] && vals[y] == \result);
 	  @
 	  @   //If the result is null, the key is not in keys.
 	  @   ensures	(\result == null) ==> 
       @					(\forall int x; 0 <= x && x < buckets;
-	  @						!(key == (keys[x])));
+	  @						key != (keys[x]));
 	  @   
 	  @   //We can't make the whole method strictly pure, 
-	  @   //because a exception creates an object.
+	  @   //because an exception creates an object.
 	  @   assignable	\strictly_nothing;
 	  @
 	  @ also
 	  @ exceptional_behavior
-	  @   requires	key == null;
+	  @   requires	key == null || key == keyDummy;
 	  @   signals_only	IllegalArgumentException;
 	  @   signals	(IllegalArgumentException e) true;
 	  @*/
     public /*@ pure @*/ /*@ nullable @*/ Object get(HashObject key) {
-		if (key == null) throw new IllegalArgumentException("argument to get() is null");
+		if (key == null || key == keyDummy) 
+			throw new IllegalArgumentException("The argument to get() is invalid");
 
 		int index = getIndex(key);
 		
@@ -298,8 +310,8 @@ public class LinearProbingHashNoEquals {
 	}
 
     /**
-	 * Inserts the specified key-value pair into the hash table, overwriting the old
-	 * value with the new value if the hash table already contains the specified key.
+	 * Inserts the given key-value pair into the hash table, overwriting the old
+	 * value with the new value if the hash table already contains the given key.
 	 *
 	 * @param key
 	 *            the key
@@ -309,9 +321,12 @@ public class LinearProbingHashNoEquals {
 	 *             if key or val is null
 	 */
 	/*@ public normal_behavior
-	  @   requires	keyDummy != (key);
+	  @   requires	keyDummy != key;
+	  @   
+	  @   //There are at least two nulls in the hash table.
+	  @   //So the invarants hold after a null is replaced with a key.
 	  @   requires	(\exists int x; 0 <= x && x < buckets;
-	  @					(\exists int y; 0 <= y && y < buckets && x != y; 
+	  @					(\exists int y; x < y && y < buckets; 
 	  @						keys[y] == null && keys[x] == null));
 	  @
 	  @   //The key-value pair is now in the hash table and at the same position. 
@@ -327,13 +342,15 @@ public class LinearProbingHashNoEquals {
 	  @
 	  @ also
 	  @ exceptional_behavior
-	  @   requires	key == null || val == null;
+	  @   requires	key == null || key == keyDummy || val == null;
 	  @   signals_only	IllegalArgumentException;
 	  @   signals	(IllegalArgumentException e) true;
 	  @*/
     public int put(HashObject key, Object val) {
-		if (key == null) throw new IllegalArgumentException("first argument to put() is null");
-		if (val == null) throw new IllegalArgumentException("second argument to put() is null");
+		if (key == null || key == keyDummy) 
+			throw new IllegalArgumentException("The first argument to put() is invalid");
+		if (val == null) 
+			throw new IllegalArgumentException("The second argument to put() is invalid");
 
 		int index = getIndex(key);
 		
@@ -346,8 +363,8 @@ public class LinearProbingHashNoEquals {
     }
 
     /**
-	 * Removes the specified key and its associated value from this hash table (if
-	 * the key is in this hash table).
+	 * Removes the given key from this hash table and therefore its 
+	 * associated value inaccessible (if the key is in this hash table).
 	 *
 	 * @param key
 	 *            the key
@@ -368,12 +385,13 @@ public class LinearProbingHashNoEquals {
 	  @
 	  @ also
 	  @ exceptional_behavior
-	  @   requires key == null;
+	  @   requires key == null || key == keyDummy;
 	  @   signals_only IllegalArgumentException;
 	  @   signals (IllegalArgumentException e) true;
 	  @*/
     public int delete(HashObject key) {
-		if (key == null) throw new IllegalArgumentException("argument to delete() is null");
+		if (key == null || key == keyDummy) 
+			throw new IllegalArgumentException("The argument to delete() is invalid");
 
 		int index = getIndex(key);
 		if (index == -1) return index;

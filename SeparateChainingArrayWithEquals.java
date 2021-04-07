@@ -3,7 +3,7 @@
  * resolution strategy. When associating a value with a key that is already in
  * the hash table, the convention is to replace the old value with the new value.
  */
-public class SeparateChainingArrayNoEquals {
+public class SeparateChainingArrayWithEquals {
 
 	private static final int INIT_CAPACITY = 8;
 
@@ -15,7 +15,7 @@ public class SeparateChainingArrayNoEquals {
 	/*@ //The hash table has at least one chain.
 	  @ instance invariant	chains > 0;
 	  @
-	  @ //The arrays keys and vals are two different arrays.
+	  @//The arrays keys and vals are nonnull and are two different arrays.
 	  @ instance invariant	keys != null && vals != null && keys != vals;
 	  @
 	  @ //The arrays keys and vals are not suptypes.
@@ -32,7 +32,7 @@ public class SeparateChainingArrayNoEquals {
 	  @ instance invariant	(\forall int x; 0 <= x && x < chains;
 	  @							keys[x] != null && vals[x] != null);
 	  @
-	  @ // Each array inside of keys has an equally long partner array in vals at the same postion.
+	  @ //Each array inside of keys has an equally long partner array in vals at the same postion.
 	  @ instance invariant	(\forall int x; 0 <= x && x < chains;
 	  @							keys[x].length == vals[x].length);
 	  @
@@ -56,7 +56,7 @@ public class SeparateChainingArrayNoEquals {
 	  @ instance invariant	(\forall int x; 0 <= x && x < chains;
 	  @							(\forall int y; 0 <= y && y < keys[x].length && keys[x][y] != null;
 	  @								(\forall int z; y < z && z < keys[x].length && keys[x][z] != null;
-	  @									keys[x][z] != (keys[x][y]))));
+	  @									!keys[x][z].equals(keys[x][y]))));
 	  @
 	  @
 	  @
@@ -67,7 +67,7 @@ public class SeparateChainingArrayNoEquals {
 	  @		//					(\forall int y; 0 <= y && y < keys[x].length;
 	  @			//					(keys[x][y] != null) ==> (vals[x][y] != null)));
 	  @
-	  @ //Each Key is in its correct chain.
+	  @ //Each Key is in its correct chain..
 	  @ //instance invariant	(\forall int x; 0 <= x && x < chains;
 	  @		//					(\forall int y; 0 <= y && y < keys[x].length;
 	  @			//					x == hash(keys[x][y])));
@@ -76,7 +76,7 @@ public class SeparateChainingArrayNoEquals {
 	/**
 	 * Initializes an empty symbol table.
 	 */
-	public SeparateChainingArrayNoEquals() {
+	public SeparateChainingArrayWithEquals() {
 		this(INIT_CAPACITY);
 	}
 
@@ -97,7 +97,7 @@ public class SeparateChainingArrayNoEquals {
 	  @
 	  @   assignable	pairs, chains, keys, vals;
 	  @*/
-	public SeparateChainingArrayNoEquals(int chains) {
+	public SeparateChainingArrayWithEquals(int chains) {
 		if (chains < 1) chains = 1;
 		pairs = 0;
 		this.chains = chains;
@@ -118,7 +118,7 @@ public class SeparateChainingArrayNoEquals {
 		  @							&& keysTemp[x][y] != null;
 		  @								(\forall int z; y < z && z < keysTemp[x].length
 		  @								&& keysTemp[x][z] != null;
-		  @									keysTemp[x][z] != keysTemp[x][y])));
+		  @									!(keysTemp[x][z].equals(keysTemp[x][y])))));
 		  @ assignable	keysTemp[*], valsTemp[*];
 		  @ decreases	chains - j;
 		  @*/
@@ -134,7 +134,7 @@ public class SeparateChainingArrayNoEquals {
 	// hash function for keys - returns value between 0 and chains-1
 	/*@ public normal_behavior
 	  @   requires	chains > 0;
-	  @   ensures	(\forall HashObject ho; key == ho 
+	  @   ensures	(\forall HashObject ho; key.equals(ho) 
 	  @					==> (\result == hash(ho)))
 	  @				&& 0 <= \result && \result < chains;
 	  @   ensures_free	\result == hash(key);
@@ -166,25 +166,25 @@ public class SeparateChainingArrayNoEquals {
 	  @   //If the result is -1 the given key is not in the given chain.
 	  @   ensures	(\result == -1) ==>
 	  @					(\forall int x; 0 <= x && x < keys[iHash].length; 
-	  @						key != (keys[iHash][x]));
+	  @						!(key.equals(keys[iHash][x])));
 	  @
 	  @   //If the result is not -1 the given key is in the chain keys[iHash]
 	  @   //	and the result is the postion of the key.
 	  @   ensures	(\result != -1) ==> 
 	  @					(0 <= \result && \result < keys[iHash].length 
-	  @					&& key == (keys[iHash][\result]));
+	  @					&& key.equals(keys[iHash][\result]));
 	  @*/
 	private /*@ strictly_pure @*/ int getIndex(int iHash, HashObject key) {
 		/*@ //Every postion in the array up until now didnt include the key.
 		  @ //	This is always true, since the method terminates if the key is found.
 		  @ loop_invariant	0 <= j && j <= keys[iHash].length &&
 		  @					(\forall int x; 0 <= x && x < j; 
-		  @						key != (keys[iHash][x]));
+		  @						!(key.equals(keys[iHash][x])));
 		  @ assignable	\strictly_nothing;
 		  @ decreases	keys[iHash].length - j;
 		  @*/
 		for (int j = 0; j < keys[iHash].length; j++) {
-			if (key == (keys[iHash][j])) {
+			if (key.equals(keys[iHash][j])) {
 				return j;
 			}
 		}
@@ -223,7 +223,7 @@ public class SeparateChainingArrayNoEquals {
 		vals[iHash] = increaseAndCopyVals(vals[iHash], val);
 		pairs++;
 	}
-	
+
 	//Increases the given array by one and adds the element to the table.
 	/*@ public normal_behavior
 	  @   requires	array != null;
@@ -314,7 +314,7 @@ public class SeparateChainingArrayNoEquals {
 	 * @param key
 	 *            the key
 	 * @return the value associated with key in the hash table; 
-	 *			null if no such  value
+	 *			null if no such value
 	 * @throws IllegalArgumentException
 	 *             if key is null
 	 */
@@ -328,13 +328,13 @@ public class SeparateChainingArrayNoEquals {
 	  @   //	and the result is at the same postion in vals.
 	  @   ensures	(\result != null) ==>
       @   				(\exists int x; 0 <= x && x < keys[hash(key)].length;
-	  @						key == keys[hash(key)][x] 
+	  @						key.equals(keys[hash(key)][x]) 
 	  @						&& vals[hash(key)][x] == \result);
 	  @
 	  @   //If the result is null, the key is not in the hash table.
 	  @   ensures	(\result == null) ==> 
       @					(\forall int x; 0 <= x && x < keys[hash(key)].length;
-	  @						key != (keys[hash(key)][x]));
+	  @						!(key.equals(keys[hash(key)][x])));
 	  @   
 	  @   //We can't make the whole method strictly pure, 
 	  @   //because an exception creates an object.
@@ -347,8 +347,7 @@ public class SeparateChainingArrayNoEquals {
 	  @   signals	(IllegalArgumentException e) true;
 	  @*/
 	public /*@ pure @*/ /*@ nullable @*/ Object get(HashObject key) {
-		if (key == null) 
-			throw new IllegalArgumentException("The argument to get() is null");
+		if (key == null) throw new IllegalArgumentException("The argument to get() is null");
 
 		int iHash = hash(key);
 		int index = getIndex(iHash, key);
@@ -371,7 +370,7 @@ public class SeparateChainingArrayNoEquals {
 	 */
 	/*@ public normal_behavior
 	  @   //The key-value pair is now in the hash table and at the same position.
-	  @   ensures	key == keys[hash(key)][\result] && vals[hash(key)][\result] == val;
+	  @   ensures	key.equals(keys[hash(key)][\result]) && vals[hash(key)][\result] == val;
 	  @
 	  @   //The method has no effect on hash table positions were the key isn't placed.
 	  @   ensures	(\forall int x; 0 <= x && x < \old(keys[hash(key)].length) && x != \result;
@@ -389,7 +388,7 @@ public class SeparateChainingArrayNoEquals {
 	public int put(HashObject key, Object val) {
 		if (key == null) 
 			throw new IllegalArgumentException("The first argument to get() is null");
-		if (val == null)
+		if (val == null) 
 			throw new IllegalArgumentException("The second argument to put() is null");
 
 		int iHash = hash(key);
@@ -417,7 +416,7 @@ public class SeparateChainingArrayNoEquals {
 	  @
 	  @   //The given key is not in the table. (This can already be true at the beginning)
 	  @   ensures	(\forall int x; 0 <= x && x < keys[hash(key)].length;
-	  @					key != (keys[hash(key)][x]));
+	  @					!(key.equals(keys[hash(key)][x])));
 	  @
 	  @   //The method has no effect on hash table positions were the key wasn't placed.
 	  @   ensures	(\forall int x; 0 <= x && x < keys[hash(key)].length && x != \result;
