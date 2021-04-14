@@ -45,34 +45,38 @@ public class SeparateChainingArrayWithInt {
 	  @							(\forall int y; 0 <= y && y < chains;
 	  @ 							keys[x] != vals[y]));
 	  @
-	  @ //pairs is the amount of key-value pairs in the hash table.
-	  @ //Is important for resize which is currently not implemented.
-	  @ //instance invariant	pairs == (\sum int x; 0 <= x && x < chains;
-	  @	//								(\num_of int y; 0 <= y && y < keys[x].length;
-	  @	//									keys[x][y] != iNull));
-	  @
 	  @ //Each key is at most ones in the same chain.
 	  @ instance invariant	(\forall int x; 0 <= x && x < chains;
 	  @							(\forall int y; 0 <= y && y < keys[x].length && keys[x][y] != iNull;
 	  @								(\forall int z; y < z && z < keys[x].length && keys[x][z] != iNull;
 	  @									keys[x][z] != keys[x][y])));
 	  @
+	  @ //pairs is the amount of key-value pairs in the hash table.
+	  @ //Is important for resize which is currently not implemented.
+	  @ //instance invariant	pairs == (\sum int x; 0 <= x && x < chains;
+	  @	//								(\num_of int y; 0 <= y && y < keys[x].length;
+	  @	//									keys[x][y] != iNull));
 	  @
+	  @
+	  @
+	  @ //The following three invariants cause problems, with the "at most ones"
+	  @ //invariant and the increaseArraySize() method. It is already enought
+	  @ //if they a requires clause. But some work if they are limited to one chain.
 	  @
 	  @ //instance invariant	(\forall int x; 0 <= x && x < chains;
-	  @		//					(\forall int y; 0 <= y && y < keys[x].length;
-	  @			//					keys[x][y] != iNull &&  vals[x][y] != iNull));
+	  @	//							(\forall int y; 0 <= y && y < keys[x].length;
+	  @	//								keys[x][y] != iNull &&  vals[x][y] != iNull));
 	  @
 	  @ //If a key is not null, then the value is also not null.
 	  @ //	This is important for get(), since it returns null if the key is not in the table.
 	  @ //instance invariant	(\forall int x; 0 <= x && x < chains;
-	  @		//					(\forall int y; 0 <= y && y < keys[x].length;
-	  @			//					(keys[x][y] != iNull) ==> (vals[x][y] != iNull)));
+	  @	//							(\forall int y; 0 <= y && y < keys[x].length;
+	  @	//								(keys[x][y] != iNull) ==> (vals[x][y] != iNull)));
 	  @
 	  @ //Each Key is in its correct chain.
 	  @ //instance invariant	(\forall int x; 0 <= x && x < chains;
-	  @		//					(\forall int y; 0 <= y && y < keys[x].length;
-	  @			//					x == hash(keys[x][y])));
+	  @	//							(\forall int y; 0 <= y && y < keys[x].length;
+	  @	//								x == hash(keys[x][y])));
 	  @*/
 
 	/**
@@ -105,7 +109,9 @@ public class SeparateChainingArrayWithInt {
 		this.chains = chains;
 		int[][] keysTemp = new int[chains][];
 		int[][] valsTemp = new int[chains][];
-		/*@ loop_invariant	0 <= j && j <= chains &&
+		/*@ //The forall is mostly just a repeat of all invariants that 
+		  @ //effect the second index of the arrays.
+		  @ loop_invariant	0 <= j && j <= chains &&
 		  @					(\forall int x; 0 <= x && x < j; 
 		  @						\fresh(keysTemp[x]) && \fresh(valsTemp[x])
 		  @						&& keysTemp[x].length == valsTemp[x].length

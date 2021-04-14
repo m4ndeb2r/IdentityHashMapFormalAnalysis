@@ -40,7 +40,7 @@ public class LinearProbingWithInt {
 	  @ //If a key is not null, then the value is also not null.
 	  @ //	This is important for get(), since it returns null if the key is not in the table.
 	  @ instance invariant	(\forall int x; 0 <= x && x < buckets;
-	  @								(keys[x] != iNull) ==> (vals[x] != iNull));
+	  @							(keys[x] != iNull) ==> (vals[x] != iNull));
 	  @
 	  @ //The following two invariants guarantee that between a key and it's hash value
 	  @ //is no null value. This is important for LinearProbing so it can stop searching
@@ -89,6 +89,9 @@ public class LinearProbingWithInt {
 		this.buckets = buckets;
 		keys = new int[buckets];
 		vals = new int[buckets];
+		
+		//Helps verification.
+		keys[0] = iNull;
     }
 
     // hash function for keys - returns value between 0 and buckets-1

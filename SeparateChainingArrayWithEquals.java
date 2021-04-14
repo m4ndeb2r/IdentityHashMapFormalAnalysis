@@ -46,31 +46,17 @@ public class SeparateChainingArrayWithEquals {
 	  @							(\forall int y; 0 <= y && y < chains;
 	  @ 							keys[x] != vals[y]));
 	  @
-	  @ //pairs is the amount of key-value pairs in the hash table.
-	  @ //Is important for resize which is currently not implemented.
-	  @ //instance invariant	pairs == (\sum int x; 0 <= x && x < chains;
-	  @	//								(\num_of int y; 0 <= y && y < keys[x].length;
-	  @	//									keys[x][y] != null));
-	  @
 	  @ //Each key is at most ones in the same chain.
 	  @ instance invariant	(\forall int x; 0 <= x && x < chains;
 	  @							(\forall int y; 0 <= y && y < keys[x].length && keys[x][y] != null;
 	  @								(\forall int z; y < z && z < keys[x].length && keys[x][z] != null;
 	  @									!keys[x][z].equals(keys[x][y]))));
 	  @
-	  @
-	  @
-	  @
-	  @ //If a key is not null, then the value is also not null.
-	  @ //	This is important for get(), since it returns null if the key is not in the table.
-	  @ //instance invariant	(\forall int x; 0 <= x && x < chains;
-	  @		//					(\forall int y; 0 <= y && y < keys[x].length;
-	  @			//					(keys[x][y] != null) ==> (vals[x][y] != null)));
-	  @
-	  @ //Each Key is in its correct chain..
-	  @ //instance invariant	(\forall int x; 0 <= x && x < chains;
-	  @		//					(\forall int y; 0 <= y && y < keys[x].length;
-	  @			//					x == hash(keys[x][y])));
+	  @ //pairs is the amount of key-value pairs in the hash table.
+	  @ //Is important for resize which is currently not implemented.
+	  @ //instance invariant	pairs == (\sum int x; 0 <= x && x < chains;
+	  @	//								(\num_of int y; 0 <= y && y < keys[x].length;
+	  @	//									keys[x][y] != null));
 	  @*/
 
 	/**
@@ -103,7 +89,9 @@ public class SeparateChainingArrayWithEquals {
 		this.chains = chains;
 		HashObject[][] keysTemp = new HashObject[chains][];
 		Object[][] valsTemp = new Object[chains][];
-		/*@ loop_invariant	0 <= j && j <= chains &&
+		/*@ //The forall is mostly just a repeat of all invariants that 
+		  @ //effect the second index of the arrays.
+		  @ loop_invariant	0 <= j && j <= chains &&
 		  @					(\forall int x; 0 <= x && x < j; 
 		  @						\fresh(keysTemp[x]) && \fresh(valsTemp[x])
 		  @						&& keysTemp[x].length == valsTemp[x].length

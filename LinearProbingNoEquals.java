@@ -90,6 +90,9 @@ public class LinearProbingNoEquals {
 		this.buckets = buckets;
 		keys = new HashObject[buckets];
 		vals = new Object[buckets];
+		
+		//Helps verification.
+		keys[0] = null;
     }
 
     // hash function for keys - returns value between 0 and buckets-1

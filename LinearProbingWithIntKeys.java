@@ -92,6 +92,9 @@ public class LinearProbingWithIntKeys {
 		this.buckets = buckets;
 		keys = new int[buckets];
 		vals = new Object[buckets];
+		
+		//Helps verification.
+		keys[0] = iNull;
     }
 
     // hash function for keys - returns value between 0 and buckets-1
